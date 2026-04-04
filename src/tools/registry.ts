@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../core/types.js";
+import type { ToolDefinition } from "./types.js";
 import { createReadFileTool } from "./readFile.js";
 
 /**

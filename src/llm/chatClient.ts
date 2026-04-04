@@ -1,4 +1,5 @@
 import type { AppConfig } from "../core/config.js";
+import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload } from "./types.js";
 
 /**
  * 本文件负责：
@@ -12,48 +13,59 @@ import type { AppConfig } from "../core/config.js";
  * - 对可恢复错误（429/5xx/网络抖动）做有限重试，提高稳定性。
  */
 
-// OpenAI-compatible function tool 声明（与上游模型协议保持一致）。
-export type ChatFunctionTool = {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-  };
-};
-
-// 模型返回的单个函数调用结构（tool call）。
-export type ChatFunctionCall = {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
-};
-
-// Chat Completions 消息结构（仅保留项目当前会消费的字段）。
-export type ChatMessage = {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
-  tool_calls?: ChatFunctionCall[];
-  tool_call_id?: string;
-  name?: string;
-};
-
-// 仅保留当前项目实际使用的响应字段，减少类型噪音。
-type ChatCompletionResponse = {
-  id: string;
-  choices?: Array<{
-    message?: ChatMessage;
-  }>;
-  error?: {
-    message?: string;
-    code?: string;
-  };
-};
-
 const lastRequestAtByProvider = new Map<string, number>();
+
+/**
+ * 提取可读的响应片段，避免把整段 HTML/长文本直接塞进错误消息。
+ */
+function toBodySnippet(bodyText: string, maxChars = 240): string {
+  const oneLine = bodyText.replace(/\s+/g, " ").trim();
+  if (!oneLine) {
+    return "";
+  }
+  return oneLine.length > maxChars ? `${oneLine.slice(0, maxChars)}...` : oneLine;
+}
+
+/**
+ * 安全解析响应 JSON。
+ *
+ * 返回值说明：
+ * - `data`：解析成功且为对象时返回；
+ * - `parseError`：空字符串响应时为 `null`，解析失败时提供错误文案。
+ */
+function parseJsonResponse(bodyText: string): {
+  data: LlmChatCompletionResponse | null;
+  parseError: string | null;
+} {
+  const trimmed = bodyText.trim();
+  if (!trimmed) {
+    return {
+      data: null,
+      parseError: null
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        data: null,
+        parseError: "Response JSON root is not an object."
+      };
+    }
+
+    return {
+      data: parsed as LlmChatCompletionResponse,
+      parseError: null
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      data: null,
+      parseError: `Invalid JSON response: ${message}`
+    };
+  }
+}
 
 /**
  * 计算 provider 的最小请求间隔（毫秒）。
@@ -104,11 +116,8 @@ async function throttleBeforeRequest(config: AppConfig, debug: boolean): Promise
 
 export async function createChatCompletion(
   config: AppConfig,
-  payload: {
-    messages: ChatMessage[];
-    tools?: ChatFunctionTool[];
-  }
-): Promise<ChatCompletionResponse> {
+  payload: LlmCreateChatCompletionPayload
+): Promise<LlmChatCompletionResponse> {
   const endpoint = `${config.baseUrl}/chat/completions`;
   const debug = process.env.CODE_AGENT_DEBUG === "1";
   /**
@@ -147,7 +156,9 @@ export async function createChatCompletion(
         signal: controller.signal
       });
 
-      const data = (await response.json()) as ChatCompletionResponse;
+      const rawBody = await response.text();
+      const parsedResponse = parseJsonResponse(rawBody);
+      const data = parsedResponse.data;
 
       if (!response.ok) {
         /**
@@ -155,7 +166,13 @@ export async function createChatCompletion(
          * - 429/5xx：视为可恢复，优先按 retry-after 或本地退避重试；
          * - 其它状态：直接抛错，避免无效重试浪费时间。
          */
-        const errorMessage = data.error?.message ?? `HTTP ${response.status}`;
+        const bodySnippet = toBodySnippet(rawBody);
+        const nonJsonHint = parsedResponse.parseError
+          ? `${parsedResponse.parseError}${bodySnippet ? ` Raw body: ${bodySnippet}` : ""}`
+          : bodySnippet
+            ? `Raw body: ${bodySnippet}`
+            : "Empty response body.";
+        const errorMessage = data?.error?.message ?? nonJsonHint ?? `HTTP ${response.status}`;
         const isRetriable = response.status === 429 || response.status >= 500;
 
         if (isRetriable && attempt < maxRetries) {
@@ -178,6 +195,16 @@ export async function createChatCompletion(
         }
 
         throw new Error(`[${config.provider}] ${response.status} ${errorMessage}`);
+      }
+
+      if (!data) {
+        const bodySnippet = toBodySnippet(rawBody);
+        const detail = parsedResponse.parseError
+          ? parsedResponse.parseError
+          : bodySnippet
+            ? `Raw body: ${bodySnippet}`
+            : "Empty response body.";
+        throw new Error(`[${config.provider}] Invalid JSON response from ${endpoint}. ${detail}`);
       }
 
       return data;

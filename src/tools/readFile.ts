@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ToolDefinition } from "../core/types.js";
+import type { ToolDefinition } from "./types.js";
 
 /**
  * read_file 工具：
@@ -62,6 +62,16 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
   return {
     name: "read_file",
     description: "Read a UTF-8 file from the current project directory.",
+    /**
+     * 工具元信息（v0.1.0 先完成声明，后续版本再接入权限系统）。
+     *
+     * - read_file 只读，不修改环境；
+     * - 不是破坏性操作；
+     * - 读取本身可并发执行，不依赖共享可变状态。
+     */
+    isReadOnly: true,
+    isDestructive: false,
+    isConcurrencySafe: true,
     inputSchema: {
       type: "object",
       properties: {

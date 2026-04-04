@@ -2,18 +2,20 @@
 
 import "dotenv/config";
 import { setDefaultResultOrder } from "node:dns";
-import { runAgent } from "../agent/runAgent.js";
+import { QueryEngine } from "../app/queryEngine.js";
+import { loadConfig } from "../core/config.js";
+import { createToolRegistry } from "../tools/registry.js";
 
 /**
  * CLI 入口职责：
  * 1. 读取环境变量；
  * 2. 解析用户输入；
- * 3. 调度 agent 并打印结果；
+ * 3. 初始化 QueryEngine 并执行查询；
  * 4. 统一错误出口与退出码。
  *
  * 约束：
  * - 只做“启动与编排”，不承载业务逻辑；
- * - 业务策略应放在 agent/llm/tools 层。
+ * - 业务策略应放在 app/loop/llm/tools 层。
  */
 
 // 统一的 CLI 用法提示，参数缺失时输出到 stderr。
@@ -37,8 +39,24 @@ async function main(): Promise<void> {
   }
 
   try {
-    // CLI 只负责调用 runAgent 并输出最终文本，不参与具体推理过程。
-    const answer = await runAgent(prompt);
+    /**
+     * v0.1.0 后 CLI 只做“配置初始化 + Engine 调度”。
+     *
+     * 关键边界：
+     * - CLI 不直接参与模型循环；
+     * - CLI 不直接触达工具执行；
+     * - 这样可以保证后续 REPL/多轮模式也复用同一编排层。
+     */
+    const config = loadConfig();
+    const toolRegistry = createToolRegistry({
+      rootDir: config.projectRoot,
+      maxFileChars: config.maxFileChars
+    });
+    const engine = new QueryEngine({
+      config,
+      toolRegistry
+    });
+    const answer = await engine.run(prompt);
     console.log(answer);
   } catch (error) {
     /**
