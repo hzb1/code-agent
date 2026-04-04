@@ -2,7 +2,14 @@ import path from "node:path";
 
 export type LlmProvider = "deepseek" | "zhipu" | "qwen" | "bytedance";
 
-// 全局运行配置：由环境变量解析后得到，供 agent/llm/tool 统一使用。
+/**
+ * 全局运行配置：由环境变量解析后得到，供 agent/llm/tool 统一使用。
+ *
+ * 设计目标：
+ * - 统一配置入口，避免各模块直接读 process.env 导致行为不一致；
+ * - 通过类型收敛，把“字符串配置”转换成“可直接消费的强类型配置”；
+ * - 将默认值策略集中在这里，降低调用方复杂度。
+ */
 export type AppConfig = {
   projectRoot: string;
   provider: LlmProvider;
@@ -37,7 +44,18 @@ const DEFAULT_MAX_AGENT_LOOPS = 5;
 const DEFAULT_MAX_FILE_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
 
-// 解析正整数配置项，非法值自动回退到默认值，避免因配置错误导致崩溃。
+/**
+ * 解析正整数配置项。
+ *
+ * 处理策略：
+ * - 缺失值 -> 回退默认值；
+ * - 非数字或小于等于 0 -> 回退默认值；
+ * - 合法正整数 -> 直接使用。
+ *
+ * 为什么回退而不是抛错：
+ * - 这类配置通常是“性能/资源上限”而不是“启动必要条件”；
+ * - 回退默认值可以提高容错性，减少无意义的启动失败。
+ */
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) {
     return fallback;
@@ -51,7 +69,13 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
-// 统一 provider 白名单校验，防止拼写错误进入下游网络调用阶段才报错。
+/**
+ * 统一 provider 白名单校验。
+ *
+ * 风险点：
+ * - 若不在入口校验，拼写错误会在网络层才暴露，定位成本高；
+ * - 统一在此处失败可以给出清晰错误，提升排障效率。
+ */
 function parseProvider(raw: string | undefined): LlmProvider {
   const provider = raw?.trim().toLowerCase() ?? DEFAULT_PROVIDER;
   if (provider === "deepseek" || provider === "zhipu" || provider === "qwen" || provider === "bytedance") {
@@ -63,13 +87,26 @@ function parseProvider(raw: string | undefined): LlmProvider {
   );
 }
 
-// 将空字符串归一为 undefined，便于后续使用 ?? 回退默认值。
+/**
+ * 将空字符串归一为 undefined，便于后续用 `??` 统一处理默认值回退。
+ *
+ * 这样可以避免出现：
+ * - 用户写了 `LLM_MODEL=`（空值）却覆盖默认模型；
+ * - 逻辑上“有配置但无内容”的隐性错误。
+ */
 function trimOrUndefined(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-// 按 provider 选择 API Key，优先通用变量，再回退 provider 专属变量。
+/**
+ * 按 provider 选择 API Key：优先通用变量，再回退 provider 专属变量。
+ *
+ * 设计理由：
+ * - 通用变量便于快速切换 provider；
+ * - 专属变量适合多 provider 并存场景；
+ * - 缺失时给出 provider 对应提示，降低配置门槛。
+ */
 function resolveApiKey(provider: LlmProvider): string {
   const generic = trimOrUndefined(process.env.LLM_API_KEY);
   if (generic) {
@@ -101,12 +138,26 @@ function resolveApiKey(provider: LlmProvider): string {
   throw new Error(`Missing API key for provider '${provider}'. ${hint}`);
 }
 
-// 统一去除结尾斜杠，避免 URL 拼接出现双斜杠。
+/**
+ * 统一去除 base URL 结尾斜杠。
+ *
+ * 目的：
+ * - 避免 endpoint 拼接时出现 `//chat/completions`；
+ * - 减少不同 provider URL 风格差异带来的细节错误。
+ */
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
 export function loadConfig(): AppConfig {
+  /**
+   * 配置装配顺序说明：
+   * 1. 先解析 provider（决定后续默认值与 key 来源）；
+   * 2. 再解析 baseUrl/model（支持显式覆盖）；
+   * 3. 最后解析通用运行参数（loop/file/timeout）。
+   *
+   * 这样设计可以确保 provider 相关默认值始终可预测。
+   */
   const provider = parseProvider(process.env.LLM_PROVIDER);
   const providerDefault = PROVIDER_DEFAULTS[provider];
   const baseUrl = normalizeBaseUrl(trimOrUndefined(process.env.LLM_BASE_URL) ?? providerDefault.baseUrl);
@@ -119,7 +170,13 @@ export function loadConfig(): AppConfig {
   }
 
   return {
-    // projectRoot 固定为当前进程工作目录，作为工具访问边界根目录。
+    /**
+     * 将当前工作目录作为工具访问边界根目录。
+     *
+     * 风险提示：
+     * - 运行命令所在目录会直接影响文件访问范围；
+     * - 因此应在项目根目录执行 CLI，避免边界误判。
+     */
     projectRoot: path.resolve(process.cwd()),
     provider,
     apiKey: resolveApiKey(provider),

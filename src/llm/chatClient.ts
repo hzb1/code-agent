@@ -1,6 +1,18 @@
 import type { AppConfig } from "../core/config.js";
 
-// OpenAI-compatible function tool 声明。
+/**
+ * 本文件负责：
+ * 1. 组装并发送 OpenAI-compatible chat/completions 请求；
+ * 2. 统一处理超时、重试、限流与错误包装；
+ * 3. 向上层暴露稳定且可诊断的调用结果。
+ *
+ * 设计原则：
+ * - 网络细节全部收口在 llm 层，agent 层只关心“拿到结果/拿到错误”；
+ * - 错误消息必须可操作，不能只给 `fetch failed` 这类无效信息；
+ * - 对可恢复错误（429/5xx/网络抖动）做有限重试，提高稳定性。
+ */
+
+// OpenAI-compatible function tool 声明（与上游模型协议保持一致）。
 export type ChatFunctionTool = {
   type: "function";
   function: {
@@ -10,7 +22,7 @@ export type ChatFunctionTool = {
   };
 };
 
-// 模型返回的单个函数调用结构。
+// 模型返回的单个函数调用结构（tool call）。
 export type ChatFunctionCall = {
   id: string;
   type: "function";
@@ -20,7 +32,7 @@ export type ChatFunctionCall = {
   };
 };
 
-// Chat Completions 消息结构（精简版）。
+// Chat Completions 消息结构（仅保留项目当前会消费的字段）。
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
@@ -29,7 +41,7 @@ export type ChatMessage = {
   name?: string;
 };
 
-// 仅保留当前项目实际使用的响应字段。
+// 仅保留当前项目实际使用的响应字段，减少类型噪音。
 type ChatCompletionResponse = {
   id: string;
   choices?: Array<{
@@ -43,7 +55,14 @@ type ChatCompletionResponse = {
 
 const lastRequestAtByProvider = new Map<string, number>();
 
-// 计算最小请求间隔，支持环境变量覆盖默认限速。
+/**
+ * 计算 provider 的最小请求间隔（毫秒）。
+ *
+ * 说明：
+ * - 允许通过 `LLM_MIN_REQUEST_INTERVAL_MS` 显式覆盖；
+ * - 未覆盖时对 zhipu 提供较保守默认值，用于降低 429 触发概率；
+ * - 其它 provider 默认 0（不主动等待）。
+ */
 function getMinIntervalMs(provider: AppConfig["provider"]): number {
   const raw = process.env.LLM_MIN_REQUEST_INTERVAL_MS;
   if (raw) {
@@ -57,7 +76,14 @@ function getMinIntervalMs(provider: AppConfig["provider"]): number {
   return provider === "zhipu" ? 2500 : 0;
 }
 
-// 以 provider 维度做串行节流，降低高频请求触发 429 的概率。
+/**
+ * 在请求前执行“基于时间戳”的节流等待。
+ *
+ * 注意：
+ * - 这是轻量节流，不是严格队列；
+ * - 对单进程顺序请求效果明显；
+ * - 对高并发场景仍可能产生瞬时突发（后续可升级为互斥队列方案）。
+ */
 async function throttleBeforeRequest(config: AppConfig, debug: boolean): Promise<void> {
   const minIntervalMs = getMinIntervalMs(config.provider);
   if (minIntervalMs <= 0) {
@@ -85,13 +111,22 @@ export async function createChatCompletion(
 ): Promise<ChatCompletionResponse> {
   const endpoint = `${config.baseUrl}/chat/completions`;
   const debug = process.env.CODE_AGENT_DEBUG === "1";
-  // 至少尝试 1 次，防止配置为 0 导致请求被跳过。
+  /**
+   * 至少尝试 1 次，防止配置写成 0 后请求被直接跳过。
+   * 这里把“重试次数下限”收敛到 1，避免调用方误配置导致静默失败。
+   */
   const maxRetries = Number.parseInt(process.env.LLM_MAX_RETRIES ?? "3", 10);
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt += 1) {
     await throttleBeforeRequest(config, debug);
-    // 每次重试都创建独立 AbortController，确保超时控制互不影响。
+    /**
+     * 每次重试都创建独立 AbortController。
+     *
+     * 原因：
+     * - AbortSignal 是一次性状态，复用会导致后续请求被立即中断；
+     * - 独立 controller 能保证每次请求都按同一超时策略执行。
+     */
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
@@ -115,11 +150,16 @@ export async function createChatCompletion(
       const data = (await response.json()) as ChatCompletionResponse;
 
       if (!response.ok) {
+        /**
+         * 统一 HTTP 非 2xx 分支：
+         * - 429/5xx：视为可恢复，优先按 retry-after 或本地退避重试；
+         * - 其它状态：直接抛错，避免无效重试浪费时间。
+         */
         const errorMessage = data.error?.message ?? `HTTP ${response.status}`;
         const isRetriable = response.status === 429 || response.status >= 500;
 
         if (isRetriable && attempt < maxRetries) {
-          // 优先尊重服务端 retry-after，没有则使用本地退避策略。
+          // 优先尊重服务端 retry-after；缺失时回退到本地退避策略。
           const retryAfter = response.headers.get("retry-after");
           const retryAfterMs = retryAfter ? Number.parseFloat(retryAfter) * 1000 : 0;
           const backoffMs = Math.max(retryAfterMs || 0, 600 * attempt + Math.floor(Math.random() * 300));
@@ -131,6 +171,7 @@ export async function createChatCompletion(
         }
 
         if (response.status === 429) {
+          // 限流错误单独给出高可读文案，便于用户快速调整频率。
           throw new Error(
             `[${config.provider}] 429 rate limit. Please slow down requests, or try again later. Server message: ${errorMessage}`
           );
@@ -141,7 +182,12 @@ export async function createChatCompletion(
 
       return data;
     } catch (error) {
-      // 分类型包装错误，保证最终提示可读且可操作。
+      /**
+       * 分类型包装错误，保证最终提示“可读、可操作”：
+       * - AbortError：明确是超时；
+       * - TypeError（fetch层）：尝试提取 cause.code/cause.message；
+       * - 其它 Error：保留原始消息并增加 endpoint 上下文。
+       */
       if (error instanceof Error && error.name === "AbortError") {
         lastError = new Error(`[${config.provider}] request timed out after ${config.timeoutMs}ms.`);
       } else if (error instanceof TypeError) {
@@ -158,6 +204,7 @@ export async function createChatCompletion(
             : "";
 
         if (code === "ENOTFOUND") {
+          // 常见于 DNS 解析失败，直接提示网络/DNS/代理排查方向。
           lastError = new Error(
             `[${config.provider}] Network DNS error (ENOTFOUND) for ${endpoint}. ` +
               `Please check your network/DNS/proxy settings, or switch provider/base URL.`
@@ -175,7 +222,13 @@ export async function createChatCompletion(
       }
 
       if (attempt < maxRetries) {
-        // 网络异常/未知异常同样走指数式退避重试。
+        /**
+         * 对 catch 分支执行有限退避重试。
+         *
+         * 目的：
+         * - 吸收短暂网络抖动；
+         * - 避免瞬时故障直接失败，提升命令稳定性。
+         */
         const backoffMs = 600 * attempt + Math.floor(Math.random() * 300);
         if (debug) {
           console.error(`[debug] retry attempt=${attempt} error waitMs=${backoffMs}`);
@@ -184,9 +237,11 @@ export async function createChatCompletion(
         continue;
       }
     } finally {
+      // 确保 timer 总能释放，避免长时间运行时累积无用定时器。
       clearTimeout(timeout);
     }
   }
 
+  // 理论上不会走到这里；兜底抛错用于防止静默失败。
   throw lastError ?? new Error(`[${config.provider}] Request failed for ${endpoint}.`);
 }

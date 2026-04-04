@@ -2,7 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ToolDefinition } from "../core/types.js";
 
-// 读取工具运行参数：根目录边界 + 内容长度上限。
+/**
+ * read_file 工具：
+ * - 只负责“安全读取文本文件”；
+ * - 不负责业务语义解释（那是模型层工作）；
+ * - 通过路径边界与长度限制控制风险。
+ */
+
+// 工具初始化参数：根目录边界 + 内容长度上限。
 type ReadFileToolOptions = {
   rootDir: string;
   maxChars: number;
@@ -12,7 +19,13 @@ type ReadFileArgs = {
   path: string;
 };
 
-// 校验并规范化工具入参，拒绝空路径。
+/**
+ * 校验并规范化工具入参。
+ *
+ * 约束：
+ * - `path` 必须是非空字符串；
+ * - 去掉首尾空白，避免“看似有值、实际无效”的输入。
+ */
 function parseArgs(args: Record<string, unknown>): ReadFileArgs {
   const rawPath = args.path;
   if (typeof rawPath !== "string" || rawPath.trim() === "") {
@@ -22,7 +35,17 @@ function parseArgs(args: Record<string, unknown>): ReadFileArgs {
   return { path: rawPath.trim() };
 }
 
-// 强制解析到项目根目录内，防止通过 ../ 等方式越界读取文件。
+/**
+ * 将目标路径解析到项目根目录下，并做越界检查。
+ *
+ * 安全意义：
+ * - 阻止 `../` 等路径穿越；
+ * - 将工具访问面限制在当前项目内，避免读取本机其它敏感文件。
+ *
+ * 注意：
+ * - 这里基于路径解析与相对路径检查；
+ * - 对软链接跨目录场景的更强防护可在后续版本补充 `realpath` 校验。
+ */
 function resolvePathInsideRoot(rootDir: string, requestedPath: string): string {
   const absoluteRoot = path.resolve(rootDir);
   const absoluteFile = path.resolve(absoluteRoot, requestedPath);
@@ -51,6 +74,14 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
       additionalProperties: false
     },
     async execute(rawArgs) {
+      /**
+       * 执行流程：
+       * 1. 解析参数；
+       * 2. 校验访问边界；
+       * 3. 校验目标是常规文件；
+       * 4. 读取并按上限截断；
+       * 5. 返回结构化 JSON 结果。
+       */
       const args = parseArgs(rawArgs);
       const absoluteFile = resolvePathInsideRoot(options.rootDir, args.path);
       const fileStats = await fs.stat(absoluteFile);
@@ -60,10 +91,17 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
       }
 
       const content = await fs.readFile(absoluteFile, "utf8");
-      // 超长文件按上限截断，并显式返回 truncated 标记给上游模型。
+      /**
+       * 超长文件按上限截断，并显式返回 `truncated` 标记。
+       *
+       * 这样做的目的：
+       * - 控制上下文大小，避免 token 与响应时长失控；
+       * - 让上游模型知道“内容不完整”，从而谨慎给出结论。
+       */
       const truncated = content.length > options.maxChars;
       const safeContent = truncated ? content.slice(0, options.maxChars) : content;
 
+      // 输出统一结构，便于模型在不同场景下稳定解析。
       return JSON.stringify(
         {
           path: args.path,

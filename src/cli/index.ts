@@ -4,18 +4,31 @@ import "dotenv/config";
 import { setDefaultResultOrder } from "node:dns";
 import { runAgent } from "../agent/runAgent.js";
 
+/**
+ * CLI 入口职责：
+ * 1. 读取环境变量；
+ * 2. 解析用户输入；
+ * 3. 调度 agent 并打印结果；
+ * 4. 统一错误出口与退出码。
+ *
+ * 约束：
+ * - 只做“启动与编排”，不承载业务逻辑；
+ * - 业务策略应放在 agent/llm/tools 层。
+ */
+
 // 统一的 CLI 用法提示，参数缺失时输出到 stderr。
 function printUsage(): void {
   console.error('Usage: code-agent "<question>"');
 }
 
 async function main(): Promise<void> {
-  // In some networks, IPv6 routing may stall while IPv4 works.
-  // Force IPv4-first resolution for more stable CLI requests.
-  // 支持通过环境变量覆盖 DNS 解析策略，便于在特殊网络下排障。
+  /**
+   * 某些网络环境下 IPv6 解析可达但链路不稳定，会表现为“请求长时间卡住”。
+   * 默认设为 ipv4first，优先走更稳定路径；仍允许通过环境变量覆盖策略。
+   */
   setDefaultResultOrder((process.env.DNS_RESULT_ORDER as "ipv4first" | "verbatim" | undefined) ?? "ipv4first");
 
-  // 将命令行余下参数拼接成用户问题，兼容多词输入。
+  // 将命令行余下参数拼接为一个问题字符串，兼容多词输入场景。
   const prompt = process.argv.slice(2).join(" ").trim();
   if (!prompt) {
     printUsage();
@@ -24,16 +37,21 @@ async function main(): Promise<void> {
   }
 
   try {
-    // 只负责调度 Agent 并打印最终答案，不在 CLI 层做业务处理。
+    // CLI 只负责调用 runAgent 并输出最终文本，不参与具体推理过程。
     const answer = await runAgent(prompt);
     console.log(answer);
   } catch (error) {
-    // 将任意异常归一为可读文本，保证 CLI 始终给出明确失败原因。
+    /**
+     * 统一错误出口：
+     * - 将未知异常归一为文本；
+     * - 打印固定前缀便于日志检索；
+     * - 以非 0 退出码向上游脚本明确失败状态。
+     */
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[code-agent] ${message}`);
     process.exitCode = 1;
   }
 }
 
-// 使用 void 显式忽略 Promise 返回值，避免未处理 Promise 警告。
+// 显式忽略 Promise 返回值，避免顶层未处理 Promise 警告噪音。
 void main();
