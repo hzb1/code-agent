@@ -2,6 +2,7 @@ import path from "node:path";
 
 export type LlmProvider = "deepseek" | "zhipu" | "qwen" | "bytedance";
 
+// 全局运行配置：由环境变量解析后得到，供 agent/llm/tool 统一使用。
 export type AppConfig = {
   projectRoot: string;
   provider: LlmProvider;
@@ -36,6 +37,7 @@ const DEFAULT_MAX_AGENT_LOOPS = 5;
 const DEFAULT_MAX_FILE_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
 
+// 解析正整数配置项，非法值自动回退到默认值，避免因配置错误导致崩溃。
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) {
     return fallback;
@@ -49,6 +51,7 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+// 统一 provider 白名单校验，防止拼写错误进入下游网络调用阶段才报错。
 function parseProvider(raw: string | undefined): LlmProvider {
   const provider = raw?.trim().toLowerCase() ?? DEFAULT_PROVIDER;
   if (provider === "deepseek" || provider === "zhipu" || provider === "qwen" || provider === "bytedance") {
@@ -60,11 +63,13 @@ function parseProvider(raw: string | undefined): LlmProvider {
   );
 }
 
+// 将空字符串归一为 undefined，便于后续使用 ?? 回退默认值。
 function trimOrUndefined(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
+// 按 provider 选择 API Key，优先通用变量，再回退 provider 专属变量。
 function resolveApiKey(provider: LlmProvider): string {
   const generic = trimOrUndefined(process.env.LLM_API_KEY);
   if (generic) {
@@ -96,6 +101,7 @@ function resolveApiKey(provider: LlmProvider): string {
   throw new Error(`Missing API key for provider '${provider}'. ${hint}`);
 }
 
+// 统一去除结尾斜杠，避免 URL 拼接出现双斜杠。
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
@@ -113,6 +119,7 @@ export function loadConfig(): AppConfig {
   }
 
   return {
+    // projectRoot 固定为当前进程工作目录，作为工具访问边界根目录。
     projectRoot: path.resolve(process.cwd()),
     provider,
     apiKey: resolveApiKey(provider),

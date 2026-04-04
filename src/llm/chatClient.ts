@@ -1,5 +1,6 @@
 import type { AppConfig } from "../core/config.js";
 
+// OpenAI-compatible function tool 声明。
 export type ChatFunctionTool = {
   type: "function";
   function: {
@@ -9,6 +10,7 @@ export type ChatFunctionTool = {
   };
 };
 
+// 模型返回的单个函数调用结构。
 export type ChatFunctionCall = {
   id: string;
   type: "function";
@@ -18,6 +20,7 @@ export type ChatFunctionCall = {
   };
 };
 
+// Chat Completions 消息结构（精简版）。
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
@@ -26,6 +29,7 @@ export type ChatMessage = {
   name?: string;
 };
 
+// 仅保留当前项目实际使用的响应字段。
 type ChatCompletionResponse = {
   id: string;
   choices?: Array<{
@@ -39,6 +43,7 @@ type ChatCompletionResponse = {
 
 const lastRequestAtByProvider = new Map<string, number>();
 
+// 计算最小请求间隔，支持环境变量覆盖默认限速。
 function getMinIntervalMs(provider: AppConfig["provider"]): number {
   const raw = process.env.LLM_MIN_REQUEST_INTERVAL_MS;
   if (raw) {
@@ -52,6 +57,7 @@ function getMinIntervalMs(provider: AppConfig["provider"]): number {
   return provider === "zhipu" ? 2500 : 0;
 }
 
+// 以 provider 维度做串行节流，降低高频请求触发 429 的概率。
 async function throttleBeforeRequest(config: AppConfig, debug: boolean): Promise<void> {
   const minIntervalMs = getMinIntervalMs(config.provider);
   if (minIntervalMs <= 0) {
@@ -79,11 +85,13 @@ export async function createChatCompletion(
 ): Promise<ChatCompletionResponse> {
   const endpoint = `${config.baseUrl}/chat/completions`;
   const debug = process.env.CODE_AGENT_DEBUG === "1";
+  // 至少尝试 1 次，防止配置为 0 导致请求被跳过。
   const maxRetries = Number.parseInt(process.env.LLM_MAX_RETRIES ?? "3", 10);
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt += 1) {
     await throttleBeforeRequest(config, debug);
+    // 每次重试都创建独立 AbortController，确保超时控制互不影响。
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
@@ -111,6 +119,7 @@ export async function createChatCompletion(
         const isRetriable = response.status === 429 || response.status >= 500;
 
         if (isRetriable && attempt < maxRetries) {
+          // 优先尊重服务端 retry-after，没有则使用本地退避策略。
           const retryAfter = response.headers.get("retry-after");
           const retryAfterMs = retryAfter ? Number.parseFloat(retryAfter) * 1000 : 0;
           const backoffMs = Math.max(retryAfterMs || 0, 600 * attempt + Math.floor(Math.random() * 300));
@@ -132,6 +141,7 @@ export async function createChatCompletion(
 
       return data;
     } catch (error) {
+      // 分类型包装错误，保证最终提示可读且可操作。
       if (error instanceof Error && error.name === "AbortError") {
         lastError = new Error(`[${config.provider}] request timed out after ${config.timeoutMs}ms.`);
       } else if (error instanceof TypeError) {
@@ -165,6 +175,7 @@ export async function createChatCompletion(
       }
 
       if (attempt < maxRetries) {
+        // 网络异常/未知异常同样走指数式退避重试。
         const backoffMs = 600 * attempt + Math.floor(Math.random() * 300);
         if (debug) {
           console.error(`[debug] retry attempt=${attempt} error waitMs=${backoffMs}`);

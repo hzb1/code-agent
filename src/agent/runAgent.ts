@@ -15,6 +15,7 @@ const SYSTEM_PROMPT = [
   "Keep final answers concise and practical."
 ].join(" ");
 
+// 将内部 ToolDefinition 转换为 OpenAI-compatible function tool 结构。
 function toChatTools(tools: ToolDefinition[]): ChatFunctionTool[] {
   return tools.map((tool) => ({
     type: "function",
@@ -26,6 +27,7 @@ function toChatTools(tools: ToolDefinition[]): ChatFunctionTool[] {
   }));
 }
 
+// tool_call.arguments 必须是 JSON object，统一在这里做严格校验。
 function parseToolArgs(raw: string): Record<string, unknown> {
   if (!raw.trim()) {
     return {};
@@ -39,6 +41,7 @@ function parseToolArgs(raw: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+// 仅提取合法的 function 类型工具调用，过滤掉不完整或无效项。
 function extractFunctionCalls(message: ChatMessage | undefined): ChatFunctionCall[] {
   if (!message?.tool_calls || !Array.isArray(message.tool_calls)) {
     return [];
@@ -54,6 +57,7 @@ function extractFunctionCalls(message: ChatMessage | undefined): ChatFunctionCal
   );
 }
 
+// 模型最终回复只接受纯文本内容，其它结构在此阶段忽略。
 function extractFinalText(message: ChatMessage | undefined): string {
   if (!message) {
     return "";
@@ -70,6 +74,7 @@ async function executeToolCall(
   call: ChatFunctionCall,
   registry: Map<string, ToolDefinition>
 ): Promise<ChatMessage> {
+  // 工具名不存在时不抛出致命异常，而是把错误反馈给模型继续对话。
   const tool = registry.get(call.function.name);
   if (!tool) {
     return {
@@ -88,6 +93,7 @@ async function executeToolCall(
       content: output
     };
   } catch (error) {
+    // 将工具运行错误封装为 tool 消息，便于模型根据错误再决策。
     const message = error instanceof Error ? error.message : String(error);
     return {
       role: "tool",
@@ -118,11 +124,13 @@ export async function runAgent(userInput: string): Promise<string> {
   });
   const tools = toChatTools(listTools(registry));
 
+  // 初始消息固定由 system + user 组成，后续循环持续追加 assistant/tool 消息。
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: prompt }
   ];
 
+  // 受 maxAgentLoops 保护，避免无限循环（安全与稳定性约束）。
   for (let i = 0; i < config.maxAgentLoops; i += 1) {
     if (debug) {
       console.error(`[debug] loop=${i + 1} sending request...`);
@@ -135,6 +143,7 @@ export async function runAgent(userInput: string): Promise<string> {
 
     const functionCalls = extractFunctionCalls(assistantMessage);
     if (functionCalls.length === 0) {
+      // 无工具调用时，视为模型给出最终答案。
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
         if (debug) {
@@ -146,6 +155,7 @@ export async function runAgent(userInput: string): Promise<string> {
       throw new Error(`[${config.provider}] Model returned no final text answer.`);
     }
 
+    // 保留这轮 assistant 的 tool_calls，上下文供下一轮模型继续推理。
     messages.push({
       role: "assistant",
       content: assistantMessage.content ?? "",
@@ -156,6 +166,7 @@ export async function runAgent(userInput: string): Promise<string> {
       if (debug) {
         console.error(`[debug] tool_call=${call.function.name}`);
       }
+      // 工具调用结果以 tool 角色回填到消息流，形成闭环。
       messages.push(await executeToolCall(call, registry));
     }
   }
