@@ -1,0 +1,24 @@
+{
+  "name": "code-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI agent that can read local project files through tool calling.",
+  "type": "module",
+  "bin": {
+    "code-agent": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "start": "node dist/cli/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
