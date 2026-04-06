@@ -261,7 +261,6 @@ export async function createChatCompletion(
           console.error(`[debug] retry attempt=${attempt} error waitMs=${backoffMs}`);
         }
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
-        continue;
       }
     } finally {
       // 确保 timer 总能释放，避免长时间运行时累积无用定时器。

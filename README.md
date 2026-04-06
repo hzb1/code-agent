@@ -112,7 +112,22 @@ npm run build
 npm run typecheck
 ```
 
-### 5. 运行
+### 5. Lint（Biome）
+```bash
+npm run lint
+```
+
+自动修复：
+```bash
+npm run lint:fix
+```
+
+格式化：
+```bash
+npm run format
+```
+
+### 6. 运行
 ```bash
 npm run start -- "解释 package.json"
 ```
