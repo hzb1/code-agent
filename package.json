@@ -5,7 +5,7 @@
   "description": "CLI agent that can read local project files through tool calling.",
   "type": "module",
   "bin": {
-    "code-agent": "dist/cli/index.js"
+    "ca": "dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

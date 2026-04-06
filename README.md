@@ -122,6 +122,12 @@ npm run start -- "解释 package.json"
 npm run dev -- "这个项目是做什么的"
 ```
 
+全局命令（推荐）：
+```bash
+npm link
+ca "解释 package.json"
+```
+
 ## 当前原型的边界
 当前代码还不是完整产品，所以你会看到这些能力仍在版本计划里逐步建设：
 - 更完整的检索工具

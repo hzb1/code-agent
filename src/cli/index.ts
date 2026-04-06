@@ -20,7 +20,7 @@ import { createToolRegistry } from "../tools/registry.js";
 
 // 统一的 CLI 用法提示，参数缺失时输出到 stderr。
 function printUsage(): void {
-  console.error('Usage: code-agent "<question>"');
+  console.error('Usage: ca "<question>"');
 }
 
 async function main(): Promise<void> {
