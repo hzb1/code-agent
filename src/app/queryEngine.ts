@@ -27,10 +27,10 @@ import type { ToolDefinition } from "../tools/types.js";
  * - 继续强调 read-only 阶段的行为边界。
  */
 const DEFAULT_SYSTEM_PROMPT = [
-  "You are a CLI coding assistant helping the user understand the current project.",
-  "If you need file contents, call the read_file tool instead of guessing.",
-  "Use tool results as source of truth.",
-  "Keep final answers concise and practical."
+  "你是一个 CLI 编码助手，负责帮助用户理解当前项目。",
+  "当需要文件内容时，请调用 read_file 工具，不要猜测。",
+  "请以工具返回结果作为事实依据。",
+  "最终回答请简洁、务实、可执行。"
 ].join(" ");
 
 export type QueryEngineOptions = {
@@ -78,12 +78,12 @@ export class QueryEngine {
   async run(userInput: string): Promise<string> {
     const prompt = userInput.trim();
     if (!prompt) {
-      throw new Error("Prompt is empty. Please provide a question.");
+      throw new Error("问题为空，请提供要询问的内容。");
     }
 
     if (this.debug) {
       console.error(
-        `[debug] provider=${this.config.provider} model=${this.config.model} timeoutMs=${this.config.timeoutMs} maxLoops=${this.config.maxAgentLoops}`
+        `[调试] provider=${this.config.provider} model=${this.config.model} 超时=${this.config.timeoutMs}ms 最大循环=${this.config.maxAgentLoops}`
       );
     }
 
@@ -106,4 +106,3 @@ export class QueryEngine {
     return loopResult.finalText;
   }
 }
-

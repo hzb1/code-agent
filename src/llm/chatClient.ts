@@ -50,7 +50,7 @@ function parseJsonResponse(bodyText: string): {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {
         data: null,
-        parseError: "Response JSON root is not an object."
+        parseError: "响应 JSON 根节点不是对象。"
       };
     }
 
@@ -62,7 +62,7 @@ function parseJsonResponse(bodyText: string): {
     const message = error instanceof Error ? error.message : String(error);
     return {
       data: null,
-      parseError: `Invalid JSON response: ${message}`
+      parseError: `无效的 JSON 响应：${message}`
     };
   }
 }
@@ -107,7 +107,7 @@ async function throttleBeforeRequest(config: AppConfig, debug: boolean): Promise
   const waitMs = Math.max(0, last + minIntervalMs - now);
   if (waitMs > 0) {
     if (debug) {
-      console.error(`[debug] throttle waitMs=${waitMs}`);
+      console.error(`[调试] 触发节流等待：${waitMs}ms`);
     }
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
@@ -168,10 +168,10 @@ export async function createChatCompletion(
          */
         const bodySnippet = toBodySnippet(rawBody);
         const nonJsonHint = parsedResponse.parseError
-          ? `${parsedResponse.parseError}${bodySnippet ? ` Raw body: ${bodySnippet}` : ""}`
+          ? `${parsedResponse.parseError}${bodySnippet ? ` 原始响应片段：${bodySnippet}` : ""}`
           : bodySnippet
-            ? `Raw body: ${bodySnippet}`
-            : "Empty response body.";
+            ? `原始响应片段：${bodySnippet}`
+            : "响应体为空。";
         const errorMessage = data?.error?.message ?? nonJsonHint ?? `HTTP ${response.status}`;
         const isRetriable = response.status === 429 || response.status >= 500;
 
@@ -181,7 +181,7 @@ export async function createChatCompletion(
           const retryAfterMs = retryAfter ? Number.parseFloat(retryAfter) * 1000 : 0;
           const backoffMs = Math.max(retryAfterMs || 0, 600 * attempt + Math.floor(Math.random() * 300));
           if (debug) {
-            console.error(`[debug] retry attempt=${attempt} status=${response.status} waitMs=${backoffMs}`);
+            console.error(`[调试] HTTP 重试：第${attempt}次，状态码=${response.status}，等待=${backoffMs}ms`);
           }
           await new Promise((resolve) => setTimeout(resolve, backoffMs));
           continue;
@@ -190,11 +190,11 @@ export async function createChatCompletion(
         if (response.status === 429) {
           // 限流错误单独给出高可读文案，便于用户快速调整频率。
           throw new Error(
-            `[${config.provider}] 429 rate limit. Please slow down requests, or try again later. Server message: ${errorMessage}`
+            `[${config.provider}] 触发 429 限流，请降低请求频率后重试。服务端信息：${errorMessage}`
           );
         }
 
-        throw new Error(`[${config.provider}] ${response.status} ${errorMessage}`);
+        throw new Error(`[${config.provider}] 请求失败，HTTP ${response.status}：${errorMessage}`);
       }
 
       if (!data) {
@@ -202,9 +202,9 @@ export async function createChatCompletion(
         const detail = parsedResponse.parseError
           ? parsedResponse.parseError
           : bodySnippet
-            ? `Raw body: ${bodySnippet}`
-            : "Empty response body.";
-        throw new Error(`[${config.provider}] Invalid JSON response from ${endpoint}. ${detail}`);
+            ? `原始响应片段：${bodySnippet}`
+            : "响应体为空。";
+        throw new Error(`[${config.provider}] 来自 ${endpoint} 的响应不是有效 JSON。${detail}`);
       }
 
       return data;
@@ -216,7 +216,7 @@ export async function createChatCompletion(
        * - 其它 Error：保留原始消息并增加 endpoint 上下文。
        */
       if (error instanceof Error && error.name === "AbortError") {
-        lastError = new Error(`[${config.provider}] request timed out after ${config.timeoutMs}ms.`);
+        lastError = new Error(`[${config.provider}] 请求超时（>${config.timeoutMs}ms）。`);
       } else if (error instanceof TypeError) {
         const cause = (error as Error & { cause?: unknown }).cause;
         const causeMessage =
@@ -233,19 +233,19 @@ export async function createChatCompletion(
         if (code === "ENOTFOUND") {
           // 常见于 DNS 解析失败，直接提示网络/DNS/代理排查方向。
           lastError = new Error(
-            `[${config.provider}] Network DNS error (ENOTFOUND) for ${endpoint}. ` +
-              `Please check your network/DNS/proxy settings, or switch provider/base URL.`
+            `[${config.provider}] 访问 ${endpoint} 时发生 DNS 错误（ENOTFOUND）。` +
+              `请检查网络/DNS/代理配置，或切换 provider/base URL。`
           );
         } else {
           lastError = new Error(
-            `[${config.provider}] Network request failed for ${endpoint}. ` +
+            `[${config.provider}] 访问 ${endpoint} 的网络请求失败。` +
               `${causeMessage || error.message}`
           );
         }
       } else if (error instanceof Error) {
-        lastError = new Error(`[${config.provider}] Request failed for ${endpoint}. ${error.message}`);
+        lastError = new Error(`[${config.provider}] 请求 ${endpoint} 失败。${error.message}`);
       } else {
-        lastError = new Error(`[${config.provider}] Request failed for ${endpoint}. Unknown error.`);
+        lastError = new Error(`[${config.provider}] 请求 ${endpoint} 失败。未知错误。`);
       }
 
       if (attempt < maxRetries) {
@@ -258,7 +258,7 @@ export async function createChatCompletion(
          */
         const backoffMs = 600 * attempt + Math.floor(Math.random() * 300);
         if (debug) {
-          console.error(`[debug] retry attempt=${attempt} error waitMs=${backoffMs}`);
+          console.error(`[调试] 异常重试：第${attempt}次，等待=${backoffMs}ms`);
         }
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
@@ -269,5 +269,5 @@ export async function createChatCompletion(
   }
 
   // 理论上不会走到这里；兜底抛错用于防止静默失败。
-  throw lastError ?? new Error(`[${config.provider}] Request failed for ${endpoint}.`);
+  throw lastError ?? new Error(`[${config.provider}] 请求 ${endpoint} 失败。`);
 }

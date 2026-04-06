@@ -29,7 +29,7 @@ type ReadFileArgs = {
 function parseArgs(args: Record<string, unknown>): ReadFileArgs {
   const rawPath = args.path;
   if (typeof rawPath !== "string" || rawPath.trim() === "") {
-    throw new Error("read_file expects a non-empty string field named 'path'.");
+    throw new Error("read_file 需要名为 'path' 的非空字符串参数。");
   }
 
   return { path: rawPath.trim() };
@@ -52,7 +52,7 @@ function resolvePathInsideRoot(rootDir: string, requestedPath: string): string {
   const relative = path.relative(absoluteRoot, absoluteFile);
 
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(`Access denied: '${requestedPath}' is outside the project root.`);
+    throw new Error(`拒绝访问：'${requestedPath}' 超出项目根目录范围。`);
   }
 
   return absoluteFile;
@@ -61,7 +61,7 @@ function resolvePathInsideRoot(rootDir: string, requestedPath: string): string {
 export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition {
   return {
     name: "read_file",
-    description: "Read a UTF-8 file from the current project directory.",
+    description: "读取当前项目目录中的 UTF-8 文本文件。",
     /**
      * 工具元信息（v0.1.0 先完成声明，后续版本再接入权限系统）。
      *
@@ -77,7 +77,7 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
       properties: {
         path: {
           type: "string",
-          description: "Relative file path inside the project, for example: package.json"
+          description: "项目内相对路径，例如：package.json"
         }
       },
       required: ["path"],
@@ -97,7 +97,7 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
       const fileStats = await fs.stat(absoluteFile);
 
       if (!fileStats.isFile()) {
-        throw new Error(`'${args.path}' is not a regular file.`);
+        throw new Error(`'${args.path}' 不是常规文件。`);
       }
 
       const content = await fs.readFile(absoluteFile, "utf8");

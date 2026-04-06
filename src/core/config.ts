@@ -83,7 +83,7 @@ function parseProvider(raw: string | undefined): LlmProvider {
   }
 
   throw new Error(
-    `Unsupported LLM_PROVIDER '${raw}'. Use one of: deepseek, zhipu, qwen, bytedance.`
+    `不支持的 LLM_PROVIDER '${raw}'。可选值：deepseek、zhipu、qwen、bytedance。`
   );
 }
 
@@ -128,14 +128,14 @@ function resolveApiKey(provider: LlmProvider): string {
 
   const hint =
     provider === "deepseek"
-      ? "Set LLM_API_KEY or DEEPSEEK_API_KEY."
+      ? "请设置 LLM_API_KEY 或 DEEPSEEK_API_KEY。"
       : provider === "zhipu"
-        ? "Set LLM_API_KEY, ZHIPU_API_KEY, or ZAI_API_KEY."
+        ? "请设置 LLM_API_KEY、ZHIPU_API_KEY 或 ZAI_API_KEY。"
         : provider === "qwen"
-          ? "Set LLM_API_KEY or DASHSCOPE_API_KEY."
-          : "Set LLM_API_KEY or ARK_API_KEY.";
+          ? "请设置 LLM_API_KEY 或 DASHSCOPE_API_KEY。"
+          : "请设置 LLM_API_KEY 或 ARK_API_KEY。";
 
-  throw new Error(`Missing API key for provider '${provider}'. ${hint}`);
+  throw new Error(`provider='${provider}' 缺少 API Key。${hint}`);
 }
 
 /**
@@ -165,7 +165,7 @@ export function loadConfig(): AppConfig {
 
   if (!model) {
     throw new Error(
-      `Missing model for provider '${provider}'. Please set LLM_MODEL (for ByteDance usually use your endpoint/model id).`
+      `provider='${provider}' 缺少模型配置。请设置 LLM_MODEL（ByteDance 通常填 endpoint/model id）。`
     );
   }
 

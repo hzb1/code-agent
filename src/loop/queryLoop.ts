@@ -102,7 +102,7 @@ function parseToolArgs(raw: string): Record<string, unknown> {
 
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new ToolExecutionError("Tool call arguments must be a JSON object.");
+    throw new ToolExecutionError("工具调用参数必须是 JSON 对象。");
   }
 
   return parsed as Record<string, unknown>;
@@ -121,7 +121,7 @@ async function executeToolCall(call: LlmFunctionCall, registry: Map<string, Tool
     return {
       role: "tool",
       toolCallId: call.id,
-      content: `Tool '${call.function.name}' is not registered.`
+      content: `工具 '${call.function.name}' 未注册。`
     };
   }
 
@@ -138,7 +138,7 @@ async function executeToolCall(call: LlmFunctionCall, registry: Map<string, Tool
     return {
       role: "tool",
       toolCallId: call.id,
-      content: `Tool execution error: ${message}`
+      content: `工具执行错误：${message}`
     };
   }
 }
@@ -155,7 +155,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
 
   for (let i = 0; i < config.maxAgentLoops; i += 1) {
     if (debug) {
-      console.error(`[debug] loop=${i + 1} sending request...`);
+      console.error(`[调试] 循环=${i + 1}，正在发送模型请求...`);
     }
 
     const response = await createChatCompletion(config, {
@@ -165,7 +165,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     const assistantMessage = response.choices?.[0]?.message;
 
     if (!assistantMessage) {
-      throw new ProviderError(`[${config.provider}] Model returned no message.`);
+      throw new ProviderError(`[${config.provider}] 模型未返回消息。`);
     }
 
     const functionCalls = extractFunctionCalls(assistantMessage);
@@ -173,7 +173,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
         if (debug) {
-          console.error(`[debug] completed in ${Date.now() - startedAt}ms`);
+          console.error(`[调试] 已完成，总耗时=${Date.now() - startedAt}ms`);
         }
 
         return {
@@ -182,7 +182,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
         };
       }
 
-      throw new ProviderError(`[${config.provider}] Model returned no final text answer.`);
+      throw new ProviderError(`[${config.provider}] 模型未返回最终文本答案。`);
     }
 
     const nextAssistantMessage: AssistantMessage = {
@@ -194,12 +194,11 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
 
     for (const call of functionCalls) {
       if (debug) {
-        console.error(`[debug] tool_call=${call.function.name}`);
+        console.error(`[调试] 检测到工具调用：${call.function.name}`);
       }
       messages.push(await executeToolCall(call, toolRegistry));
     }
   }
 
-  throw new LoopTerminatedError(`Reached maximum loop limit (${config.maxAgentLoops}).`);
+  throw new LoopTerminatedError(`已达到最大循环次数限制（${config.maxAgentLoops}）。`);
 }
-

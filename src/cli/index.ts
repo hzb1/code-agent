@@ -20,7 +20,7 @@ import { createToolRegistry } from "../tools/registry.js";
 
 // 统一的 CLI 用法提示，参数缺失时输出到 stderr。
 function printUsage(): void {
-  console.error('Usage: ca "<question>"');
+  console.error('用法：ca "<问题>"');
 }
 
 async function main(): Promise<void> {
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
      * - 以非 0 退出码向上游脚本明确失败状态。
      */
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[code-agent] ${message}`);
+    console.error(`[ca] ${message}`);
     process.exitCode = 1;
   }
 }
