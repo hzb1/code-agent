@@ -87,6 +87,59 @@ function toToolsDebugSummary(payload: LlmCreateChatCompletionPayload): unknown {
 }
 
 /**
+ * 将调试字段格式化为更适合终端扫读的多行文本。
+ *
+ * 设计目的：
+ * - 相比直接 `console.error(object)`，分行输出更像 Network 面板；
+ * - 每一行都保持“标签: 值”的结构，便于快速定位问题；
+ * - 对数组和对象统一做紧凑 JSON 序列化，避免终端输出层级过深。
+ */
+function formatHttpDebugValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
+    return String(value);
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * 统一输出一组 HTTP 调试字段。
+ *
+ * 这里故意使用文本块，而不是直接输出对象：
+ * - 终端里更接近“Request / Response”面板；
+ * - 便于后续继续扩展更多 section，而不需要改日志消费习惯；
+ * - 对用户来说，复制到聊天里也更容易阅读。
+ */
+function logHttpDebugSection(title: string, rows: Array<[string, unknown]>): void {
+  const lines = [`[HTTP 调试] ${title}`];
+
+  for (const [label, value] of rows) {
+    const formattedValue = formatHttpDebugValue(value);
+    const formattedLines = formattedValue.split("\n");
+
+    if (formattedLines.length === 1) {
+      lines.push(`  ${label}: ${formattedLines[0]}`);
+      continue;
+    }
+
+    lines.push(`  ${label}:`);
+    for (const line of formattedLines) {
+      lines.push(`    ${line}`);
+    }
+  }
+
+  console.error(lines.join("\n"));
+}
+
+/**
  * 输出请求摘要。
  */
 function logHttpRequestSummary(
@@ -96,16 +149,16 @@ function logHttpRequestSummary(
   payload: LlmCreateChatCompletionPayload,
   attempt: number
 ): void {
-  console.error("[HTTP 调试] 请求摘要", {
-    provider: config.provider,
-    endpoint,
-    attempt,
-    model: config.model,
-    timeoutMs: config.timeoutMs,
-    headers: redactHeaders(headers),
-    messages: toMessagesDebugSummary(payload),
-    tools: toToolsDebugSummary(payload)
-  });
+  logHttpDebugSection("Request", [
+    ["provider", config.provider],
+    ["endpoint", endpoint],
+    ["attempt", attempt],
+    ["model", config.model],
+    ["timeoutMs", config.timeoutMs],
+    ["headers", redactHeaders(headers)],
+    ["messages", toMessagesDebugSummary(payload)],
+    ["tools", toToolsDebugSummary(payload)]
+  ]);
 }
 
 /**
@@ -116,12 +169,12 @@ function logHttpResponseSummary(
   response: Response,
   rawBody: string
 ): void {
-  console.error("[HTTP 调试] 响应摘要", {
-    endpoint,
-    status: response.status,
-    statusText: response.statusText,
-    bodySnippet: toBodySnippet(rawBody, 400)
-  });
+  logHttpDebugSection("Response", [
+    ["endpoint", endpoint],
+    ["status", response.status],
+    ["statusText", response.statusText],
+    ["bodySnippet", toBodySnippet(rawBody, 400)]
+  ]);
 }
 
 /**
