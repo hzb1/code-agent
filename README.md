@@ -143,6 +143,19 @@ npm link
 ca "解释 package.json"
 ```
 
+## 直接打印 HTTP 调试日志
+如果你不想再折腾 Charles，也可以直接让 CLI 打印 LLM 请求/响应摘要。
+
+开启方式：
+```bash
+LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
+```
+
+说明：
+- 会打印请求 URL、model、消息摘要、工具摘要、响应状态码和响应片段；
+- `Authorization` 会自动脱敏，不会直接打印完整 key；
+- 这更适合排查“发了什么”“回了什么”，比抓包更轻量。
+
 ## 当前原型的边界
 当前代码还不是完整产品，所以你会看到这些能力仍在版本计划里逐步建设：
 - 更完整的检索工具

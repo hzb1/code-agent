@@ -15,6 +15,115 @@ import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload } from "
 
 const lastRequestAtByProvider = new Map<string, number>();
 
+type HttpDebugHeaders = Record<string, string>;
+
+/**
+ * 判断是否启用 HTTP 调试日志。
+ *
+ * 与 `CODE_AGENT_DEBUG` 的区别：
+ * - `CODE_AGENT_DEBUG` 更偏运行过程调试，例如 loop 次数、重试、节流等待；
+ * - `LLM_DEBUG_HTTP` 专门用于查看网络请求摘要，避免每次都打开一大堆无关日志。
+ */
+function isHttpDebugEnabled(): boolean {
+  return process.env.LLM_DEBUG_HTTP === "1";
+}
+
+/**
+ * 对敏感请求头做脱敏处理，避免把完整 token 打到终端里。
+ */
+function redactHeaders(headers: HttpDebugHeaders): HttpDebugHeaders {
+  const nextHeaders: HttpDebugHeaders = { ...headers };
+  const authorization = nextHeaders.Authorization ?? nextHeaders.authorization;
+  if (authorization) {
+    const masked =
+      authorization.length <= 20
+        ? "***"
+        : `${authorization.slice(0, 10)}...${authorization.slice(-6)}`;
+    nextHeaders.Authorization = masked;
+    delete nextHeaders.authorization;
+  }
+
+  return nextHeaders;
+}
+
+/**
+ * 将消息数组压缩成适合调试查看的摘要。
+ *
+ * 设计目的：
+ * - 让你能快速判断“请求到底发了什么”；
+ * - 避免把整段长上下文全部打到终端，导致调试噪音过大；
+ * - 工具参数如果特别长，也尽量只保留前面的关键片段。
+ */
+function toMessagesDebugSummary(payload: LlmCreateChatCompletionPayload): unknown[] {
+  return payload.messages.map((message) => {
+    const content = typeof message.content === "string" ? toBodySnippet(message.content, 180) : message.content;
+
+    return {
+      role: message.role,
+      content,
+      toolCalls:
+        message.tool_calls?.map((toolCall) => ({
+          id: toolCall.id,
+          name: toolCall.function.name,
+          argumentsSnippet: toBodySnippet(toolCall.function.arguments, 120)
+        })) ?? []
+    };
+  });
+}
+
+/**
+ * 将 tools 转成轻量摘要，避免把完整 schema 全打出来。
+ */
+function toToolsDebugSummary(payload: LlmCreateChatCompletionPayload): unknown {
+  if (!payload.tools || payload.tools.length === 0) {
+    return [];
+  }
+
+  return payload.tools.map((tool) => ({
+    type: tool.type,
+    name: tool.function.name,
+    description: toBodySnippet(tool.function.description, 120)
+  }));
+}
+
+/**
+ * 输出请求摘要。
+ */
+function logHttpRequestSummary(
+  endpoint: string,
+  config: AppConfig,
+  headers: HttpDebugHeaders,
+  payload: LlmCreateChatCompletionPayload,
+  attempt: number
+): void {
+  console.error("[HTTP 调试] 请求摘要", {
+    provider: config.provider,
+    endpoint,
+    attempt,
+    model: config.model,
+    timeoutMs: config.timeoutMs,
+    headers: redactHeaders(headers),
+    messages: toMessagesDebugSummary(payload),
+    tools: toToolsDebugSummary(payload)
+  });
+}
+
+/**
+ * 输出响应摘要。
+ */
+function logHttpResponseSummary(
+  endpoint: string,
+  response: Response,
+  rawBody: string
+): void {
+  console.error("[HTTP 调试] 响应摘要", {
+    endpoint,
+    status: response.status,
+    statusText: response.statusText,
+    bodySnippet: toBodySnippet(rawBody, 400)
+  });
+}
+
 /**
  * 提取可读的响应片段，避免把整段 HTML/长文本直接塞进错误消息。
  */
@@ -120,6 +229,7 @@ export async function createChatCompletion(
 ): Promise<LlmChatCompletionResponse> {
   const endpoint = `${config.baseUrl}/chat/completions`;
   const debug = process.env.CODE_AGENT_DEBUG === "1";
+  const httpDebug = isHttpDebugEnabled();
   /**
    * 至少尝试 1 次，防止配置写成 0 后请求被直接跳过。
    * 这里把“重试次数下限”收敛到 1，避免调用方误配置导致静默失败。
@@ -140,7 +250,7 @@ export async function createChatCompletion(
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 
     try {
-      const response = await fetch(endpoint, {
+      const requestInit: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -154,9 +264,19 @@ export async function createChatCompletion(
           stream: false
         }),
         signal: controller.signal
-      });
+      };
+
+      const requestHeaders = requestInit.headers as HttpDebugHeaders;
+      if (httpDebug) {
+        logHttpRequestSummary(endpoint, config, requestHeaders, payload, attempt);
+      }
+
+      const response = await fetch(endpoint, requestInit);
 
       const rawBody = await response.text();
+      if (httpDebug) {
+        logHttpResponseSummary(endpoint, response, rawBody);
+      }
       const parsedResponse = parseJsonResponse(rawBody);
       const data = parsedResponse.data;
 
