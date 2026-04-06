@@ -189,9 +189,7 @@
 ---
 
 ## 9. 产品路线的正式来源
-从现在开始，产品路线不再以旧的 `ROADMAP.md` 为主。
-
-正式来源改为：
+产品路线的正式来源为：
 - `docs/version-plan/README.md`
 - `docs/version-plan/COVERAGE.md`
 - `docs/version-plan/*.md`

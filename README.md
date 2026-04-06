@@ -173,5 +173,4 @@ LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
 - 以版本计划为准，逐步演进。
 
 ## 说明
-- 旧的更细碎版本计划已经归档到 `docs/version-plan/legacy/`。
-- 旧的 `ROADMAP.md` 不再作为主执行依据。
+- 当前仅保留 `docs/version-plan/` 下的正式版本计划文档作为执行依据。
