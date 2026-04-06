@@ -10,10 +10,12 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli/index.ts",
+    "dev:debug": "CODE_AGENT_DEBUG=1 tsx src/cli/index.ts",
     "format": "biome format --write src",
     "lint": "biome lint src",
     "lint:fix": "biome lint --write src",
     "start": "node dist/cli/index.js",
+    "start:debug": "CODE_AGENT_DEBUG=1 node dist/cli/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
