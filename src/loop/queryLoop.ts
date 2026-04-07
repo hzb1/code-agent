@@ -243,14 +243,44 @@ function extractPathFromToolArguments(raw: string): string | undefined {
   }
 }
 
+function extractQueryFromToolArguments(raw: string): string | undefined {
+  if (!raw.trim()) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const query = (parsed as Record<string, unknown>).query;
+    if (typeof query === "string" && query.trim()) {
+      return query.trim();
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 生成“用户可读”的工具调用短句。
  *
  * 当前目标风格：
- * - read_file 显示为 `Read xxx.ts`，更贴近 CLI Coding Agent 的直觉阅读方式；
+ * - list/search/read 都转成短句动作，降低理解成本；
  * - 其他工具先保留通用回退格式，避免隐藏关键信息。
  */
 function formatConversationToolCall(call: LlmFunctionCall): string {
+  if (call.function.name === "list_files") {
+    const path = extractPathFromToolArguments(call.function.arguments);
+    return path ? `[对话] 模型：List ${path}` : "[对话] 模型：List";
+  }
+  if (call.function.name === "search_files") {
+    const query = extractQueryFromToolArguments(call.function.arguments);
+    return query ? `[对话] 模型：Search ${query}` : "[对话] 模型：Search";
+  }
   if (call.function.name === "read_file") {
     const path = extractPathFromToolArguments(call.function.arguments);
     return path ? `[对话] 模型：Read ${path}` : "[对话] 模型：Read";

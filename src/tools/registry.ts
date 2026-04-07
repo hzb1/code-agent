@@ -1,5 +1,7 @@
 import type { ToolDefinition } from "./types.js";
+import { createListFilesTool } from "./listFiles.js";
 import { createReadFileTool } from "./readFile.js";
+import { createSearchFilesTool } from "./searchFiles.js";
 
 /**
  * 工具注册中心：
@@ -16,19 +18,32 @@ type RegistryOptions = {
 
 export function createToolRegistry(options: RegistryOptions): Map<string, ToolDefinition> {
   /**
-   * 当前版本仅注册 `read_file`。
+   * 当前版本注册只读检索三件套：
+   * - `list_files`：先看目录骨架；
+   * - `search_files`：按关键词定位候选文件；
+   * - `read_file`：读取具体文件内容。
    *
-   * 这样做的原因：
-   * - 保持 v0 阶段功能边界清晰；
-   * - 降低权限面，优先确保读取能力稳定可靠；
-   * - 为后续渐进式扩展工具保留单一入口。
+   * 这样设计的原因：
+   * - 让模型具备“先找再读”的最小工作流，减少路径猜测；
+   * - 仍然保持全链路只读，符合当前版本安全边界；
+   * - 工具都走同一 registry，后续加权限/调度时改动点集中。
    */
+  const listFilesTool = createListFilesTool({
+    rootDir: options.rootDir
+  });
+  const searchFilesTool = createSearchFilesTool({
+    rootDir: options.rootDir
+  });
   const readFileTool = createReadFileTool({
     rootDir: options.rootDir,
     maxChars: options.maxFileChars
   });
 
-  return new Map([[readFileTool.name, readFileTool]]);
+  return new Map([
+    [listFilesTool.name, listFilesTool],
+    [searchFilesTool.name, searchFilesTool],
+    [readFileTool.name, readFileTool]
+  ]);
 }
 
 /**
