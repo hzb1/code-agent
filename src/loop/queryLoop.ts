@@ -179,33 +179,6 @@ function printAssistantReplySummary(loopIndex: number, message: LlmMessage, func
 }
 
 /**
- * 读取最近一条用户消息，用于在第一轮展示“你问了什么”。
- *
- * 设计原因：
- * - 用户态过程日志应当帮助“快速建立上下文”；
- * - 只在第一轮显示用户问题，可避免每轮重复同一信息。
- */
-function getLatestUserMessage(messages: Message[]): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].role === "user") {
-      return messages[i].content;
-    }
-  }
-
-  return undefined;
-}
-
-/**
- * 打印“用户可读”的轮次起始信息。
- */
-function printConversationRoundStart(loopIndex: number, messageCount: number, toolCount: number, userMessage?: string): void {
-  console.error(`[对话] 第${loopIndex}轮：请求模型（上下文 ${messageCount} 条，工具 ${toolCount} 个）`);
-  if (userMessage) {
-    console.error(`[对话] 用户：${toConversationTextPreview(userMessage)}`);
-  }
-}
-
-/**
  * 打印“用户可读”的模型决策信息。
  *
  * 输出策略：
@@ -215,10 +188,20 @@ function printConversationRoundStart(loopIndex: number, messageCount: number, to
 function printConversationAssistantDecision(message: LlmMessage, functionCalls: LlmFunctionCall[]): void {
   const content = typeof message.content === "string" ? message.content.trim() : "";
   if (functionCalls.length > 0) {
-    console.error(`[对话] 模型：准备调用工具 ${functionCalls.map((call) => call.function.name).join("、")}`);
+    const toolNames = functionCalls.map((call) => call.function.name).join("、");
+    /**
+     * 将“模型决策 + 模型补充”合并为一条日志。
+     *
+     * 设计原因：
+     * - 用户更关心“本轮要做什么”这一条主信息；
+     * - 分成两行会增加视觉跳跃，尤其在多轮工具调用时更明显；
+     * - 合并后既保留补充信息，又减少日志行数，阅读负担更低。
+     */
     if (content) {
-      console.error(`[对话] 模型补充：${toConversationTextPreview(content)}`);
+      console.error(`[对话] 模型：准备调用工具 ${toolNames}（补充：${toConversationTextPreview(content)}）`);
+      return;
     }
+    console.error(`[对话] 模型：准备调用工具 ${toolNames}`);
     return;
   }
 
@@ -228,6 +211,52 @@ function printConversationAssistantDecision(message: LlmMessage, functionCalls: 
   }
 
   console.error("[对话] 模型：本轮未触发工具，也未给出可读文本。");
+}
+
+/**
+ * 从工具参数字符串里尽量提取 path 字段。
+ *
+ * 为什么这里“宽松解析”而不是复用 parseToolArgs：
+ * - 该函数只用于“日志展示”，不属于真实执行链路；
+ * - 日志层不应因为模型参数临时不规范而抛错，最多降级为通用文案；
+ * - 执行阶段仍由 parseToolArgs 严格校验，确保安全与一致性。
+ */
+function extractPathFromToolArguments(raw: string): string | undefined {
+  if (!raw.trim()) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const path = (parsed as Record<string, unknown>).path;
+    if (typeof path === "string" && path.trim()) {
+      return path.trim();
+    }
+
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 生成“用户可读”的工具调用短句。
+ *
+ * 当前目标风格：
+ * - read_file 显示为 `Read xxx.ts`，更贴近 CLI Coding Agent 的直觉阅读方式；
+ * - 其他工具先保留通用回退格式，避免隐藏关键信息。
+ */
+function formatConversationToolCall(call: LlmFunctionCall): string {
+  if (call.function.name === "read_file") {
+    const path = extractPathFromToolArguments(call.function.arguments);
+    return path ? `[对话] 模型：Read ${path}` : "[对话] 模型：Read";
+  }
+
+  return `[对话] ${call.function.name}(${toConversationTextPreview(call.function.arguments)})`;
 }
 
 /**
@@ -352,11 +381,6 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       toolCount: tools.length
     });
 
-    if (showConversation) {
-      const firstRoundUserMessage = i === 0 ? getLatestUserMessage(messages) : undefined;
-      printConversationRoundStart(i + 1, messages.length, tools.length, firstRoundUserMessage);
-    }
-
     /**
      * 只有在“使用内置 debug 输出”时才打印消息快照。
      * 若外部注入 onDebugEvent，默认认为由上层接管日志呈现，避免重复输出。
@@ -388,7 +412,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
         if (showConversation) {
-          console.error(`[对话] 完成：共 ${i + 1} 轮。`);
+          console.error(`[对话] 完成（${i + 1}轮）。`);
         }
         emitDebugEvent(params, {
           type: "loop_completed",
@@ -421,14 +445,9 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
         toolCallId: call.id
       });
       if (showConversation) {
-        console.error(
-          `[对话] 工具调用：${call.function.name}(${toConversationTextPreview(call.function.arguments)})`
-        );
+        console.error(formatConversationToolCall(call));
       }
       const toolMessage = await executeToolCall(call, toolRegistry);
-      if (showConversation) {
-        console.error(`[对话] 工具结果：${call.function.name} -> ${toConversationTextPreview(toolMessage.content)}`);
-      }
       messages.push(toolMessage);
     }
 
@@ -438,9 +457,6 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       toolCallCount: functionCalls.length,
       messageCount: messages.length
     });
-    if (showConversation) {
-      console.error("[对话] 继续下一轮。");
-    }
   }
 
   /**
