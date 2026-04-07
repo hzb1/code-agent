@@ -1,4 +1,5 @@
 import path from "node:path";
+import { ConfigError } from "./errors.js";
 
 export type LlmProvider = "deepseek" | "zhipu" | "qwen" | "bytedance";
 
@@ -82,7 +83,7 @@ function parseProvider(raw: string | undefined): LlmProvider {
     return provider;
   }
 
-  throw new Error(
+  throw new ConfigError(
     `不支持的 LLM_PROVIDER '${raw}'。可选值：deepseek、zhipu、qwen、bytedance。`
   );
 }
@@ -135,7 +136,7 @@ function resolveApiKey(provider: LlmProvider): string {
           ? "请设置 LLM_API_KEY 或 DASHSCOPE_API_KEY。"
           : "请设置 LLM_API_KEY 或 ARK_API_KEY。";
 
-  throw new Error(`provider='${provider}' 缺少 API Key。${hint}`);
+  throw new ConfigError(`provider='${provider}' 缺少 API Key。${hint}`);
 }
 
 /**
@@ -164,7 +165,7 @@ export function loadConfig(): AppConfig {
   const model = trimOrUndefined(process.env.LLM_MODEL) ?? providerDefault.model;
 
   if (!model) {
-    throw new Error(
+    throw new ConfigError(
       `provider='${provider}' 缺少模型配置。请设置 LLM_MODEL（ByteDance 通常填 endpoint/model id）。`
     );
   }

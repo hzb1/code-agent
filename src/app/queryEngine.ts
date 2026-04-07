@@ -1,5 +1,6 @@
+import { ConfigError } from "../core/errors.js";
 import { queryLoop } from "../loop/queryLoop.js";
-import type { QueryLoopResult } from "../loop/types.js";
+import type { QueryDebugEvent, QueryDebugEventHandler, QueryLoopResult, QueryLoopRunner } from "../loop/types.js";
 import type { AppConfig } from "../core/config.js";
 import type { Message } from "../core/message.js";
 import type { LlmFunctionTool } from "../llm/types.js";
@@ -38,6 +39,8 @@ export type QueryEngineOptions = {
   toolRegistry: Map<string, ToolDefinition>;
   systemPrompt?: string;
   debug?: boolean;
+  onDebugEvent?: QueryDebugEventHandler;
+  queryLoopRunner?: QueryLoopRunner;
 };
 
 /**
@@ -64,12 +67,36 @@ export class QueryEngine {
   private readonly toolRegistry: Map<string, ToolDefinition>;
   private readonly systemPrompt: string;
   private readonly debug: boolean;
+  private readonly onDebugEvent?: QueryDebugEventHandler;
+  private readonly queryLoopRunner: QueryLoopRunner;
 
   constructor(options: QueryEngineOptions) {
     this.config = options.config;
     this.toolRegistry = options.toolRegistry;
     this.systemPrompt = options.systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT;
     this.debug = options.debug ?? process.env.CODE_AGENT_DEBUG === "1";
+    this.onDebugEvent = options.onDebugEvent;
+    this.queryLoopRunner = options.queryLoopRunner ?? queryLoop;
+  }
+
+  /**
+   * 发出调试事件（QueryEngine 级别）。
+   */
+  private emitDebugEvent(event: QueryDebugEvent): void {
+    if (this.onDebugEvent) {
+      this.onDebugEvent(event);
+      return;
+    }
+
+    if (!this.debug) {
+      return;
+    }
+
+    if (event.type === "loop_start") {
+      console.error(
+        `[调试事件] loop_start provider=${event.provider} model=${event.model} maxLoops=${event.maxAgentLoops} timeoutMs=${event.timeoutMs} promptLength=${event.promptLength}`
+      );
+    }
   }
 
   /**
@@ -78,14 +105,17 @@ export class QueryEngine {
   async run(userInput: string): Promise<string> {
     const prompt = userInput.trim();
     if (!prompt) {
-      throw new Error("问题为空，请提供要询问的内容。");
+      throw new ConfigError("问题为空，请提供要询问的内容。");
     }
 
-    if (this.debug) {
-      console.error(
-        `[调试] provider=${this.config.provider} model=${this.config.model} 超时=${this.config.timeoutMs}ms 最大循环=${this.config.maxAgentLoops}`
-      );
-    }
+    this.emitDebugEvent({
+      type: "loop_start",
+      promptLength: prompt.length,
+      provider: this.config.provider,
+      model: this.config.model,
+      maxAgentLoops: this.config.maxAgentLoops,
+      timeoutMs: this.config.timeoutMs
+    });
 
     const startedAt = Date.now();
     const initialMessages: Message[] = [
@@ -94,13 +124,14 @@ export class QueryEngine {
     ];
     const llmTools = toLlmTools(listTools(this.toolRegistry));
 
-    const loopResult: QueryLoopResult = await queryLoop({
+    const loopResult: QueryLoopResult = await this.queryLoopRunner({
       config: this.config,
       messages: initialMessages,
       tools: llmTools,
       toolRegistry: this.toolRegistry,
       debug: this.debug,
-      startedAt
+      startedAt,
+      onDebugEvent: this.onDebugEvent
     });
 
     return loopResult.finalText;

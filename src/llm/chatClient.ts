@@ -1,4 +1,5 @@
 import type { AppConfig } from "../core/config.js";
+import { ProviderError } from "../core/errors.js";
 import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload } from "./types.js";
 
 /**
@@ -288,7 +289,7 @@ export async function createChatCompletion(
    * 这里把“重试次数下限”收敛到 1，避免调用方误配置导致静默失败。
    */
   const maxRetries = Number.parseInt(process.env.LLM_MAX_RETRIES ?? "3", 10);
-  let lastError: Error | null = null;
+  let lastError: ProviderError | null = null;
 
   for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt += 1) {
     await throttleBeforeRequest(config, debug);
@@ -362,12 +363,12 @@ export async function createChatCompletion(
 
         if (response.status === 429) {
           // 限流错误单独给出高可读文案，便于用户快速调整频率。
-          throw new Error(
+          throw new ProviderError(
             `[${config.provider}] 触发 429 限流，请降低请求频率后重试。服务端信息：${errorMessage}`
           );
         }
 
-        throw new Error(`[${config.provider}] 请求失败，HTTP ${response.status}：${errorMessage}`);
+        throw new ProviderError(`[${config.provider}] 请求失败，HTTP ${response.status}：${errorMessage}`);
       }
 
       if (!data) {
@@ -377,7 +378,7 @@ export async function createChatCompletion(
           : bodySnippet
             ? `原始响应片段：${bodySnippet}`
             : "响应体为空。";
-        throw new Error(`[${config.provider}] 来自 ${endpoint} 的响应不是有效 JSON。${detail}`);
+        throw new ProviderError(`[${config.provider}] 来自 ${endpoint} 的响应不是有效 JSON。${detail}`);
       }
 
       return data;
@@ -389,7 +390,9 @@ export async function createChatCompletion(
        * - 其它 Error：保留原始消息并增加 endpoint 上下文。
        */
       if (error instanceof Error && error.name === "AbortError") {
-        lastError = new Error(`[${config.provider}] 请求超时（>${config.timeoutMs}ms）。`);
+        lastError = new ProviderError(`[${config.provider}] 请求超时（>${config.timeoutMs}ms）。`);
+      } else if (error instanceof ProviderError) {
+        lastError = error;
       } else if (error instanceof TypeError) {
         const cause = (error as Error & { cause?: unknown }).cause;
         const causeMessage =
@@ -405,20 +408,20 @@ export async function createChatCompletion(
 
         if (code === "ENOTFOUND") {
           // 常见于 DNS 解析失败，直接提示网络/DNS/代理排查方向。
-          lastError = new Error(
+          lastError = new ProviderError(
             `[${config.provider}] 访问 ${endpoint} 时发生 DNS 错误（ENOTFOUND）。` +
               `请检查网络/DNS/代理配置，或切换 provider/base URL。`
           );
         } else {
-          lastError = new Error(
+          lastError = new ProviderError(
             `[${config.provider}] 访问 ${endpoint} 的网络请求失败。` +
               `${causeMessage || error.message}`
           );
         }
       } else if (error instanceof Error) {
-        lastError = new Error(`[${config.provider}] 请求 ${endpoint} 失败。${error.message}`);
+        lastError = new ProviderError(`[${config.provider}] 请求 ${endpoint} 失败。${error.message}`);
       } else {
-        lastError = new Error(`[${config.provider}] 请求 ${endpoint} 失败。未知错误。`);
+        lastError = new ProviderError(`[${config.provider}] 请求 ${endpoint} 失败。未知错误。`);
       }
 
       if (attempt < maxRetries) {
@@ -442,5 +445,5 @@ export async function createChatCompletion(
   }
 
   // 理论上不会走到这里；兜底抛错用于防止静默失败。
-  throw lastError ?? new Error(`[${config.provider}] 请求 ${endpoint} 失败。`);
+  throw lastError ?? new ProviderError(`[${config.provider}] 请求 ${endpoint} 失败。`);
 }

@@ -16,6 +16,9 @@
     "lint:fix": "biome lint --write src",
     "start": "node dist/cli/index.js",
     "start:debug": "CODE_AGENT_DEBUG=1 node dist/cli/index.js",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test:integration": "node --import tsx --test tests/integration/**/*.test.ts",
+    "test:unit": "node --import tsx --test tests/unit/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

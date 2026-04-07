@@ -3,7 +3,7 @@ import type { AssistantMessage, Message, ToolMessage } from "../core/message.js"
 import { createChatCompletion } from "../llm/chatClient.js";
 import type { LlmFunctionCall, LlmMessage } from "../llm/types.js";
 import type { ToolDefinition } from "../tools/types.js";
-import type { QueryLoopParams, QueryLoopResult } from "./types.js";
+import type { QueryDebugEvent, QueryLoopParams, QueryLoopResult } from "./types.js";
 
 /**
  * QueryLoop：单轮任务内的核心循环。
@@ -144,6 +144,52 @@ async function executeToolCall(call: LlmFunctionCall, registry: Map<string, Tool
 }
 
 /**
+ * 统一发出调试事件。
+ *
+ * 处理策略：
+ * - 优先调用外部注入的事件处理器；
+ * - 未注入时，若 debug 开启则输出默认日志；
+ * - debug 关闭则静默。
+ */
+function emitDebugEvent(params: QueryLoopParams, event: QueryDebugEvent): void {
+  if (params.onDebugEvent) {
+    params.onDebugEvent(event);
+    return;
+  }
+
+  if (!params.debug) {
+    return;
+  }
+
+  if (event.type === "model_request") {
+    console.error(
+      `[调试事件] model_request loop=${event.loopIndex} messages=${event.messageCount} tools=${event.toolCount}`
+    );
+    return;
+  }
+
+  if (event.type === "tool_call_detected") {
+    console.error(
+      `[调试事件] tool_call_detected loop=${event.loopIndex} tool=${event.toolName} callId=${event.toolCallId}`
+    );
+    return;
+  }
+
+  if (event.type === "loop_continue") {
+    console.error(
+      `[调试事件] loop_continue loop=${event.loopIndex} toolCalls=${event.toolCallCount} messages=${event.messageCount}`
+    );
+    return;
+  }
+
+  if (event.type === "loop_completed") {
+    console.error(
+      `[调试事件] loop_completed loops=${event.loopCount} elapsedMs=${event.elapsedMs} finalTextLength=${event.finalTextLength}`
+    );
+  }
+}
+
+/**
  * 运行 QueryLoop，并在“拿到最终文本答案”时结束。
  *
  * 终止条件：
@@ -151,14 +197,18 @@ async function executeToolCall(call: LlmFunctionCall, registry: Map<string, Tool
  * - 达到 maxAgentLoops（抛出 LoopTerminatedError）。
  */
 export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResult> {
-  const { config, messages, tools, toolRegistry, debug, startedAt } = params;
+  const { config, messages, tools, toolRegistry, startedAt } = params;
+  const requestChatCompletion = params.createChatCompletionFn ?? createChatCompletion;
 
   for (let i = 0; i < config.maxAgentLoops; i += 1) {
-    if (debug) {
-      console.error(`[调试] 循环=${i + 1}，正在发送模型请求...`);
-    }
+    emitDebugEvent(params, {
+      type: "model_request",
+      loopIndex: i + 1,
+      messageCount: messages.length,
+      toolCount: tools.length
+    });
 
-    const response = await createChatCompletion(config, {
+    const response = await requestChatCompletion(config, {
       messages: toLlmMessages(messages),
       tools
     });
@@ -172,9 +222,12 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     if (functionCalls.length === 0) {
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
-        if (debug) {
-          console.error(`[调试] 已完成，总耗时=${Date.now() - startedAt}ms`);
-        }
+        emitDebugEvent(params, {
+          type: "loop_completed",
+          loopCount: i + 1,
+          elapsedMs: Date.now() - startedAt,
+          finalTextLength: finalText.length
+        });
 
         return {
           finalText,
@@ -193,11 +246,21 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     messages.push(nextAssistantMessage);
 
     for (const call of functionCalls) {
-      if (debug) {
-        console.error(`[调试] 检测到工具调用：${call.function.name}`);
-      }
+      emitDebugEvent(params, {
+        type: "tool_call_detected",
+        loopIndex: i + 1,
+        toolName: call.function.name,
+        toolCallId: call.id
+      });
       messages.push(await executeToolCall(call, toolRegistry));
     }
+
+    emitDebugEvent(params, {
+      type: "loop_continue",
+      loopIndex: i + 1,
+      toolCallCount: functionCalls.length,
+      messageCount: messages.length
+    });
   }
 
   throw new LoopTerminatedError(`已达到最大循环次数限制（${config.maxAgentLoops}）。`);
