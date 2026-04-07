@@ -38,10 +38,12 @@ function createResponse(message: LlmChatCompletionResponse["choices"][number]["m
 
 test("queryLoop: 无 tool_call 时直接返回最终答案，并发出完成事件", async () => {
   const events: QueryDebugEvent[] = [];
+  const messages = createInitialMessages();
+  const originalMessages = messages.map((message) => ({ ...message }));
 
   const result = await queryLoop({
     config: createBaseConfig(),
-    messages: createInitialMessages(),
+    messages,
     tools: [],
     toolRegistry: new Map<string, ToolDefinition>(),
     debug: false,
@@ -56,6 +58,14 @@ test("queryLoop: 无 tool_call 时直接返回最终答案，并发出完成事�
 
   assert.equal(result.finalText, "最终答案");
   assert.equal(result.loopCount, 1);
+  assert.equal(messages.length, 2);
+  assert.deepEqual(messages, originalMessages);
+  assert.deepEqual(result.appendedMessages, [
+    {
+      role: "assistant",
+      content: "最终答案"
+    }
+  ]);
   assert.deepEqual(
     events.map((event) => event.type),
     ["model_request", "loop_completed"]
@@ -126,7 +136,18 @@ test("queryLoop: 检测到 tool_call 后继续循环并回填工具结果", asyn
   assert.equal(result.loopCount, 2);
   assert.equal(requestCount, 2);
   assert.equal(toolExecuteCount, 1);
-  assert.ok(messages.some((message) => message.role === "tool" && message.content.includes("README")));
+  assert.equal(messages.length, 2);
+  assert.deepEqual(
+    result.appendedMessages.map((message) => message.role),
+    ["assistant", "tool", "assistant"]
+  );
+  assert.ok(
+    result.appendedMessages.some((message) => message.role === "tool" && message.content.includes("README"))
+  );
+  assert.equal(result.appendedMessages[2]?.role, "assistant");
+  if (result.appendedMessages[2]?.role === "assistant") {
+    assert.equal(result.appendedMessages[2].content, "读取完成");
+  }
   assert.deepEqual(
     events.map((event) => event.type),
     ["model_request", "tool_call_detected", "loop_continue", "model_request", "loop_completed"]

@@ -70,7 +70,14 @@ export type CreateChatCompletionFn = (
  */
 export type QueryLoopParams = {
   config: AppConfig;
-  messages: Message[];
+  /**
+   * QueryEngine 传入的会话消息快照（只读）。
+   *
+   * 约束：
+   * - QueryLoop 只能读取，不能直接修改调用方状态；
+   * - 需要新增的消息必须通过 QueryLoopResult.appendedMessages 返回给上层应用。
+   */
+  messages: ReadonlyArray<Message>;
   tools: LlmFunctionTool[];
   toolRegistry: Map<string, ToolDefinition>;
   debug: boolean;
@@ -91,11 +98,15 @@ export type QueryLoopParams = {
 /**
  * QueryLoop 结果。
  *
- * `loopCount` 便于后续做调试/统计，不影响当前功能语义。
+ * 字段说明：
+ * - `finalText`：本轮最终回答；
+ * - `loopCount`：本轮循环次数，便于调试/统计；
+ * - `appendedMessages`：相对输入快照新增的消息增量，由 QueryEngine 统一合并。
  */
 export type QueryLoopResult = {
   finalText: string;
   loopCount: number;
+  appendedMessages: Message[];
 };
 
 /**

@@ -39,7 +39,7 @@ const CONVERSATION_PREVIEW_CHARS = 100;
  * - QueryLoop 同时理解“内部消息”与“LLM 协议”，是最自然的边界点；
  * - 可以避免让 core/message.ts 反向依赖 llm/types.ts。
  */
-function toLlmMessages(messages: Message[]): LlmMessage[] {
+function toLlmMessages(messages: ReadonlyArray<Message>): LlmMessage[] {
   return messages.map((message) => {
     if (message.role === "assistant") {
       return {
@@ -146,7 +146,7 @@ function toDebugMessageLine(message: Message): string {
  * 这里保留详细快照是为了定位协议/状态问题；
  * 普通用户过程日志不再复用该函数，避免输出过重。
  */
-function printLoopMessageSnapshot(messages: Message[]): void {
+function printLoopMessageSnapshot(messages: ReadonlyArray<Message>): void {
   if (messages.length > DEBUG_MAX_LOGGED_MESSAGES) {
     console.error(
       `[调试消息] 当前共 ${messages.length} 条消息，仅展示最近 ${DEBUG_MAX_LOGGED_MESSAGES} 条。`
@@ -402,12 +402,22 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
   const { config, messages, tools, toolRegistry, startedAt } = params;
   const requestChatCompletion = params.createChatCompletionFn ?? createChatCompletion;
   const showConversation = params.showConversation ?? false;
+  /**
+   * QueryLoop 只在局部副本上执行消息追加，避免直接修改调用方入参。
+   *
+   * 设计原因：
+   * - 上层（QueryEngine）才是会话状态 owner；
+   * - QueryLoop 只负责计算本轮新增消息；
+   * - 最终通过 appendedMessages 显式返回给上层合并。
+   */
+  const workingMessages: Message[] = [...messages];
+  const baseMessageCount = messages.length;
 
   for (let i = 0; i < config.maxAgentLoops; i += 1) {
     emitDebugEvent(params, {
       type: "model_request",
       loopIndex: i + 1,
-      messageCount: messages.length,
+      messageCount: workingMessages.length,
       toolCount: tools.length
     });
 
@@ -417,11 +427,11 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
      */
     if (params.debug && !params.onDebugEvent) {
       console.error(`[调试消息] 第${i + 1}轮请求前消息快照：`);
-      printLoopMessageSnapshot(messages);
+      printLoopMessageSnapshot(workingMessages);
     }
 
     const response = await requestChatCompletion(config, {
-      messages: toLlmMessages(messages),
+      messages: toLlmMessages(workingMessages),
       tools
     });
     const assistantMessage = response.choices?.[0]?.message;
@@ -441,6 +451,19 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     if (functionCalls.length === 0) {
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
+        /**
+         * 将最终回答追加到 QueryLoop 的局部工作消息流。
+         *
+         * 设计原因：
+         * - 本轮返回给 QueryEngine 的 `appendedMessages` 需要包含最终 assistant；
+         * - QueryLoop 只写局部副本，不直接改调用方入参；
+         * - 由 QueryEngine 在上层统一合并进会话状态，保持所有权边界清晰。
+         */
+        workingMessages.push({
+          role: "assistant",
+          content: finalText
+        });
+
         if (showConversation) {
           console.error(`[对话] 完成（${i + 1}轮）。`);
         }
@@ -453,7 +476,8 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
 
         return {
           finalText,
-          loopCount: i + 1
+          loopCount: i + 1,
+          appendedMessages: workingMessages.slice(baseMessageCount)
         };
       }
 
@@ -465,7 +489,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       content: typeof assistantMessage.content === "string" ? assistantMessage.content : "",
       toolCalls: functionCalls
     };
-    messages.push(nextAssistantMessage);
+    workingMessages.push(nextAssistantMessage);
 
     for (const call of functionCalls) {
       emitDebugEvent(params, {
@@ -478,14 +502,14 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
         console.error(formatConversationToolCall(call));
       }
       const toolMessage = await executeToolCall(call, toolRegistry);
-      messages.push(toolMessage);
+      workingMessages.push(toolMessage);
     }
 
     emitDebugEvent(params, {
       type: "loop_continue",
       loopIndex: i + 1,
       toolCallCount: functionCalls.length,
-      messageCount: messages.length
+      messageCount: workingMessages.length
     });
   }
 
