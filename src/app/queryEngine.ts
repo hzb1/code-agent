@@ -39,6 +39,7 @@ export type QueryEngineOptions = {
   toolRegistry: Map<string, ToolDefinition>;
   systemPrompt?: string;
   debug?: boolean;
+  showConversation?: boolean;
   onDebugEvent?: QueryDebugEventHandler;
   queryLoopRunner?: QueryLoopRunner;
 };
@@ -67,6 +68,7 @@ export class QueryEngine {
   private readonly toolRegistry: Map<string, ToolDefinition>;
   private readonly systemPrompt: string;
   private readonly debug: boolean;
+  private readonly showConversation: boolean;
   private readonly onDebugEvent?: QueryDebugEventHandler;
   private readonly queryLoopRunner: QueryLoopRunner;
 
@@ -75,6 +77,14 @@ export class QueryEngine {
     this.toolRegistry = options.toolRegistry;
     this.systemPrompt = options.systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT;
     this.debug = options.debug ?? process.env.CODE_AGENT_DEBUG === "1";
+    /**
+     * 对话过程日志默认开启，满足 CLI 场景下“可见过程”的体验诉求。
+     *
+     * 关闭方式：
+     * - 设置 `CA_SHOW_CHAT_TRACE=0`；
+     * - 或在构造 QueryEngine 时显式传 `showConversation: false`。
+     */
+    this.showConversation = options.showConversation ?? process.env.CA_SHOW_CHAT_TRACE !== "0";
     this.onDebugEvent = options.onDebugEvent;
     this.queryLoopRunner = options.queryLoopRunner ?? queryLoop;
   }
@@ -130,6 +140,7 @@ export class QueryEngine {
       tools: llmTools,
       toolRegistry: this.toolRegistry,
       debug: this.debug,
+      showConversation: this.showConversation,
       startedAt,
       onDebugEvent: this.onDebugEvent
     });

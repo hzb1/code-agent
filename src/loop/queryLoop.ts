@@ -15,6 +15,7 @@ import type { QueryDebugEvent, QueryLoopParams, QueryLoopResult } from "./types.
  */
 const DEBUG_MAX_LOGGED_MESSAGES = 10;
 const DEBUG_PREVIEW_CHARS = 160;
+const CONVERSATION_PREVIEW_CHARS = 100;
 
 /**
  * QueryLoop：单轮任务内的核心循环。
@@ -111,6 +112,15 @@ function toDebugTextPreview(content: string, maxChars: number = DEBUG_PREVIEW_CH
 }
 
 /**
+ * 面向用户的对话过程摘要：
+ * - 比 debug 摘要更短，避免刷屏；
+ * - 只保留“读得懂且有决策价值”的信息。
+ */
+function toConversationTextPreview(content: string, maxChars: number = CONVERSATION_PREVIEW_CHARS): string {
+  return toDebugTextPreview(content, maxChars);
+}
+
+/**
  * 将一条内部消息渲染为调试可读摘要。
  *
  * 该函数只做展示，不参与协议转换或业务判断。
@@ -131,7 +141,10 @@ function toDebugMessageLine(message: Message): string {
 }
 
 /**
- * 在 debug 模式打印本轮发送给模型的消息快照（最近若干条）。
+ * 打印 debug 消息快照（最近若干条）。
+ *
+ * 这里保留详细快照是为了定位协议/状态问题；
+ * 普通用户过程日志不再复用该函数，避免输出过重。
  */
 function printLoopMessageSnapshot(messages: Message[]): void {
   if (messages.length > DEBUG_MAX_LOGGED_MESSAGES) {
@@ -149,7 +162,7 @@ function printLoopMessageSnapshot(messages: Message[]): void {
 }
 
 /**
- * 在 debug 模式打印模型本轮回复摘要。
+ * 打印 debug 视角的模型回复摘要。
  */
 function printAssistantReplySummary(loopIndex: number, message: LlmMessage, functionCalls: LlmFunctionCall[]): void {
   const content = typeof message.content === "string" ? toDebugTextPreview(message.content) : "[非文本内容]";
@@ -163,6 +176,58 @@ function printAssistantReplySummary(loopIndex: number, message: LlmMessage, func
   }
 
   console.error(`[调试消息] 第${loopIndex}轮模型回复：content="${content}"（无 tool_call）`);
+}
+
+/**
+ * 读取最近一条用户消息，用于在第一轮展示“你问了什么”。
+ *
+ * 设计原因：
+ * - 用户态过程日志应当帮助“快速建立上下文”；
+ * - 只在第一轮显示用户问题，可避免每轮重复同一信息。
+ */
+function getLatestUserMessage(messages: Message[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === "user") {
+      return messages[i].content;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * 打印“用户可读”的轮次起始信息。
+ */
+function printConversationRoundStart(loopIndex: number, messageCount: number, toolCount: number, userMessage?: string): void {
+  console.error(`[对话] 第${loopIndex}轮：请求模型（上下文 ${messageCount} 条，工具 ${toolCount} 个）`);
+  if (userMessage) {
+    console.error(`[对话] 用户：${toConversationTextPreview(userMessage)}`);
+  }
+}
+
+/**
+ * 打印“用户可读”的模型决策信息。
+ *
+ * 输出策略：
+ * - 有工具调用：显示调用了哪些工具（模型在行动）；
+ * - 无工具调用：显示模型已给出最终答案（模型已收敛）。
+ */
+function printConversationAssistantDecision(message: LlmMessage, functionCalls: LlmFunctionCall[]): void {
+  const content = typeof message.content === "string" ? message.content.trim() : "";
+  if (functionCalls.length > 0) {
+    console.error(`[对话] 模型：准备调用工具 ${functionCalls.map((call) => call.function.name).join("、")}`);
+    if (content) {
+      console.error(`[对话] 模型补充：${toConversationTextPreview(content)}`);
+    }
+    return;
+  }
+
+  if (content) {
+    console.error(`[对话] 模型：已给出最终答案（摘要：${toConversationTextPreview(content)}）`);
+    return;
+  }
+
+  console.error("[对话] 模型：本轮未触发工具，也未给出可读文本。");
 }
 
 /**
@@ -277,6 +342,7 @@ function emitDebugEvent(params: QueryLoopParams, event: QueryDebugEvent): void {
 export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResult> {
   const { config, messages, tools, toolRegistry, startedAt } = params;
   const requestChatCompletion = params.createChatCompletionFn ?? createChatCompletion;
+  const showConversation = params.showConversation ?? false;
 
   for (let i = 0; i < config.maxAgentLoops; i += 1) {
     emitDebugEvent(params, {
@@ -285,6 +351,11 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       messageCount: messages.length,
       toolCount: tools.length
     });
+
+    if (showConversation) {
+      const firstRoundUserMessage = i === 0 ? getLatestUserMessage(messages) : undefined;
+      printConversationRoundStart(i + 1, messages.length, tools.length, firstRoundUserMessage);
+    }
 
     /**
      * 只有在“使用内置 debug 输出”时才打印消息快照。
@@ -306,6 +377,9 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     }
 
     const functionCalls = extractFunctionCalls(assistantMessage);
+    if (showConversation) {
+      printConversationAssistantDecision(assistantMessage, functionCalls);
+    }
     if (params.debug && !params.onDebugEvent) {
       printAssistantReplySummary(i + 1, assistantMessage, functionCalls);
     }
@@ -313,6 +387,9 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     if (functionCalls.length === 0) {
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
+        if (showConversation) {
+          console.error(`[对话] 完成：共 ${i + 1} 轮。`);
+        }
         emitDebugEvent(params, {
           type: "loop_completed",
           loopCount: i + 1,
@@ -343,7 +420,16 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
         toolName: call.function.name,
         toolCallId: call.id
       });
-      messages.push(await executeToolCall(call, toolRegistry));
+      if (showConversation) {
+        console.error(
+          `[对话] 工具调用：${call.function.name}(${toConversationTextPreview(call.function.arguments)})`
+        );
+      }
+      const toolMessage = await executeToolCall(call, toolRegistry);
+      if (showConversation) {
+        console.error(`[对话] 工具结果：${call.function.name} -> ${toConversationTextPreview(toolMessage.content)}`);
+      }
+      messages.push(toolMessage);
     }
 
     emitDebugEvent(params, {
@@ -352,6 +438,9 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       toolCallCount: functionCalls.length,
       messageCount: messages.length
     });
+    if (showConversation) {
+      console.error("[对话] 继续下一轮。");
+    }
   }
 
   /**

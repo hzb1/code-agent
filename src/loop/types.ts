@@ -74,6 +74,15 @@ export type QueryLoopParams = {
   tools: LlmFunctionTool[];
   toolRegistry: Map<string, ToolDefinition>;
   debug: boolean;
+  /**
+   * 是否向用户输出“对话过程日志”。
+   *
+   * 说明：
+   * - 这类日志面向普通用户，不等同于 debug 技术日志；
+   * - 默认由 QueryEngine 开启，可通过环境变量关闭；
+   * - 输出到 stderr，不影响 stdout 上的最终答案消费。
+   */
+  showConversation?: boolean;
   startedAt: number;
   createChatCompletionFn?: CreateChatCompletionFn;
   onDebugEvent?: QueryDebugEventHandler;
