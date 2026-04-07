@@ -94,6 +94,7 @@ cp .env.example .env
 LLM_PROVIDER=qwen
 LLM_API_KEY=your_api_key
 LLM_MODEL=qwen3-coder-plus
+MAX_AGENT_LOOPS=12
 ```
 
 当前原型支持的 provider：
@@ -135,6 +136,15 @@ npm run start -- "解释 package.json"
 开发模式：
 ```bash
 npm run dev -- "这个项目是做什么的"
+```
+
+如果你在复杂任务里遇到：
+```text
+[ca] 已达到最大循环次数限制（...）
+```
+可以调大循环上限后重试：
+```bash
+MAX_AGENT_LOOPS=20 ca "分析这个项目"
 ```
 
 全局命令（推荐）：

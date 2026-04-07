@@ -6,6 +6,17 @@ import type { ToolDefinition } from "../tools/types.js";
 import type { QueryDebugEvent, QueryLoopParams, QueryLoopResult } from "./types.js";
 
 /**
+ * Debug 日志裁剪阈值。
+ *
+ * 设计理由：
+ * - 用户希望看到循环中的消息，但完整消息可能非常长；
+ * - 使用“最近 N 条 + 单条内容摘要”能在可读性和信息量之间取得平衡；
+ * - 该阈值只影响调试日志，不影响模型输入与业务行为。
+ */
+const DEBUG_MAX_LOGGED_MESSAGES = 10;
+const DEBUG_PREVIEW_CHARS = 160;
+
+/**
  * QueryLoop：单轮任务内的核心循环。
  *
  * 循环职责：
@@ -85,6 +96,73 @@ function extractFinalText(message: LlmMessage | undefined): string {
   }
 
   return message.content.trim();
+}
+
+/**
+ * 将文本压成单行摘要，避免 debug 日志被超长内容淹没。
+ */
+function toDebugTextPreview(content: string, maxChars: number = DEBUG_PREVIEW_CHARS): string {
+  const singleLine = content.replace(/\s+/g, " ").trim();
+  if (singleLine.length <= maxChars) {
+    return singleLine;
+  }
+
+  return `${singleLine.slice(0, maxChars)}...`;
+}
+
+/**
+ * 将一条内部消息渲染为调试可读摘要。
+ *
+ * 该函数只做展示，不参与协议转换或业务判断。
+ */
+function toDebugMessageLine(message: Message): string {
+  if (message.role === "assistant") {
+    const toolCalls = message.toolCalls ?? [];
+    const toolCallNames =
+      toolCalls.length > 0 ? ` toolCalls=${toolCalls.map((call) => call.function.name).join(",")}` : "";
+    return `role=assistant content="${toDebugTextPreview(message.content)}"${toolCallNames}`;
+  }
+
+  if (message.role === "tool") {
+    return `role=tool toolCallId=${message.toolCallId} content="${toDebugTextPreview(message.content)}"`;
+  }
+
+  return `role=${message.role} content="${toDebugTextPreview(message.content)}"`;
+}
+
+/**
+ * 在 debug 模式打印本轮发送给模型的消息快照（最近若干条）。
+ */
+function printLoopMessageSnapshot(messages: Message[]): void {
+  if (messages.length > DEBUG_MAX_LOGGED_MESSAGES) {
+    console.error(
+      `[调试消息] 当前共 ${messages.length} 条消息，仅展示最近 ${DEBUG_MAX_LOGGED_MESSAGES} 条。`
+    );
+  } else {
+    console.error(`[调试消息] 当前共 ${messages.length} 条消息，全部展示。`);
+  }
+
+  const startIndex = Math.max(0, messages.length - DEBUG_MAX_LOGGED_MESSAGES);
+  for (let i = startIndex; i < messages.length; i += 1) {
+    console.error(`[调试消息] #${i + 1} ${toDebugMessageLine(messages[i])}`);
+  }
+}
+
+/**
+ * 在 debug 模式打印模型本轮回复摘要。
+ */
+function printAssistantReplySummary(loopIndex: number, message: LlmMessage, functionCalls: LlmFunctionCall[]): void {
+  const content = typeof message.content === "string" ? toDebugTextPreview(message.content) : "[非文本内容]";
+  if (functionCalls.length > 0) {
+    console.error(
+      `[调试消息] 第${loopIndex}轮模型回复：content="${content}" toolCalls=${functionCalls
+        .map((call) => call.function.name)
+        .join(",")}`
+    );
+    return;
+  }
+
+  console.error(`[调试消息] 第${loopIndex}轮模型回复：content="${content}"（无 tool_call）`);
 }
 
 /**
@@ -208,6 +286,15 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       toolCount: tools.length
     });
 
+    /**
+     * 只有在“使用内置 debug 输出”时才打印消息快照。
+     * 若外部注入 onDebugEvent，默认认为由上层接管日志呈现，避免重复输出。
+     */
+    if (params.debug && !params.onDebugEvent) {
+      console.error(`[调试消息] 第${i + 1}轮请求前消息快照：`);
+      printLoopMessageSnapshot(messages);
+    }
+
     const response = await requestChatCompletion(config, {
       messages: toLlmMessages(messages),
       tools
@@ -219,6 +306,10 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     }
 
     const functionCalls = extractFunctionCalls(assistantMessage);
+    if (params.debug && !params.onDebugEvent) {
+      printAssistantReplySummary(i + 1, assistantMessage, functionCalls);
+    }
+
     if (functionCalls.length === 0) {
       const finalText = extractFinalText(assistantMessage);
       if (finalText) {
@@ -263,5 +354,12 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
     });
   }
 
-  throw new LoopTerminatedError(`已达到最大循环次数限制（${config.maxAgentLoops}）。`);
+  /**
+   * 失败提示尽量可操作：
+   * - 明确告诉用户可以通过 MAX_AGENT_LOOPS 调大上限；
+   * - 避免只报“失败”但不给下一步动作，降低排障成本。
+   */
+  throw new LoopTerminatedError(
+    `已达到最大循环次数限制（${config.maxAgentLoops}次）。当前配置 MAX_AGENT_LOOPS=${config.maxAgentLoops}。可在 .env 中调大后重试（例如 12 或 20）。`
+  );
 }

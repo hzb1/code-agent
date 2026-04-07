@@ -161,6 +161,10 @@ test("queryLoop: 超过最大循环次数时抛出 LoopTerminatedError", async (
       }),
     (error) => {
       assert.ok(error instanceof LoopTerminatedError);
+      assert.match(
+        (error as Error).message,
+        /已达到最大循环次数限制（1次）.*MAX_AGENT_LOOPS=1/
+      );
       return true;
     }
   );

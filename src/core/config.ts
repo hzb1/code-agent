@@ -41,7 +41,15 @@ const PROVIDER_DEFAULTS: Record<LlmProvider, { baseUrl: string; model?: string }
 };
 
 const DEFAULT_PROVIDER: LlmProvider = "qwen";
-const DEFAULT_MAX_AGENT_LOOPS = 5;
+/**
+ * 默认循环上限（单次查询）。
+ *
+ * 设计取舍：
+ * - 5 轮在“解释单文件”场景足够，但在“分析整个项目”这类跨文件任务里偏紧，
+ *   容易在模型还在拉取关键信息时被提前终止；
+ * - 将默认值提升到 12，仍然保持明确上限，继续满足“禁止无限循环”的安全约束。
+ */
+const DEFAULT_MAX_AGENT_LOOPS = 12;
 const DEFAULT_MAX_FILE_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
 
