@@ -63,7 +63,7 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
     name: "read_file",
     description: "读取当前项目目录中的 UTF-8 文本文件。",
     /**
-     * 工具元信息（v0.1.0 先完成声明，后续版本再接入权限系统）。
+     * 工具元信息（当前骨架阶段先完成声明，后续版本再接入权限系统）。
      *
      * - read_file 只读，不修改环境；
      * - 不是破坏性操作；

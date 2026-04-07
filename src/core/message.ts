@@ -1,7 +1,7 @@
 /**
  * 统一消息模型（Core 层）。
  *
- * 为什么在 v0.1.0 单独抽这个文件：
+ * 为什么在骨架重构阶段单独抽这个文件：
  * 1. 入口层（CLI）、编排层（QueryEngine）、循环层（QueryLoop）都需要共享消息结构；
  * 2. 如果消息结构散落在多个模块，后续加 REPL/多轮会话时会出现协议漂移；
  * 3. 提前稳定角色与字段语义，可以把“流程重构”和“能力扩展”解耦。
@@ -76,4 +76,3 @@ export type ToolMessage = {
  * 统一消息联合类型。
  */
 export type Message = SystemMessage | UserMessage | AssistantMessage | ToolMessage;
-

@@ -10,7 +10,7 @@ import type { ToolDefinition } from "../tools/types.js";
 /**
  * QueryEngine：一次查询任务的编排层。
  *
- * 当前版本（v0.1.0）职责：
+ * 当前骨架阶段职责：
  * 1. 接收用户输入；
  * 2. 组装初始消息与工具协议；
  * 3. 调用 QueryLoop 执行；
@@ -48,7 +48,7 @@ export type QueryEngineOptions = {
  * 将 Tool Protocol 转为 LLM function tool 协议。
  *
  * 注意：
- * - v0.1.0 只传递模型调用所需字段；
+ * - 当前阶段只传递模型调用所需字段；
  * - 风险元信息（isReadOnly 等）先保留在 Tool Protocol，
  *   后续权限系统再消费，不在本版提前引入复杂调度逻辑。
  */

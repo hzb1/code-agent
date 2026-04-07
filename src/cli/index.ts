@@ -40,7 +40,7 @@ async function main(): Promise<void> {
 
   try {
     /**
-     * v0.1.0 后 CLI 只做“配置初始化 + Engine 调度”。
+     * 当前骨架阶段下，CLI 只做“配置初始化 + Engine 调度”。
      *
      * 关键边界：
      * - CLI 不直接参与模型循环；

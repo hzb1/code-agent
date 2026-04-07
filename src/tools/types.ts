@@ -1,7 +1,7 @@
 /**
  * Tool Protocol（工具协议层）。
  *
- * v0.1.0 目标是把“工具是什么、如何被调用、风险级别如何表达”统一下来，
+ * 骨架阶段的目标是把“工具是什么、如何被调用、风险级别如何表达”统一下来，
  * 这样 QueryLoop/QueryEngine 在调用工具时就能依赖稳定契约。
  */
 
@@ -34,7 +34,7 @@ export type ToolExecutionArgs = Record<string, unknown>;
  * - `isDestructive`：是否可能带来不可逆影响；
  * - `isConcurrencySafe`：是否可并发执行且结果可预期。
  *
- * 这些字段在 v0.1.0 先完成协议定义与基础标注，
+ * 这些字段在当前骨架阶段先完成协议定义与基础标注，
  * 后续版本再接入权限系统与调度策略。
  */
 export type ToolDefinition = {
@@ -46,4 +46,3 @@ export type ToolDefinition = {
   isConcurrencySafe: boolean;
   execute: (args: ToolExecutionArgs) => Promise<string>;
 };
-
