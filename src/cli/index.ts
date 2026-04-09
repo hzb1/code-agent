@@ -5,6 +5,8 @@ import { setDefaultResultOrder } from "node:dns";
 import { QueryEngine } from "../app/queryEngine.js";
 import { loadConfig } from "../core/config.js";
 import { createToolRegistry } from "../tools/registry.js";
+import { printAnswer, printError, printUsage } from "./output.js";
+import { startRepl } from "./repl.js";
 
 /**
  * CLI 入口职责：
@@ -18,9 +20,41 @@ import { createToolRegistry } from "../tools/registry.js";
  * - 业务策略应放在 app/loop/llm/tools 层。
  */
 
-// 统一的 CLI 用法提示，参数缺失时输出到 stderr。
-function printUsage(): void {
-  console.error('用法：ca "<问题>"');
+type CliMode =
+  | {
+      mode: "help";
+    }
+  | {
+      mode: "single";
+      prompt: string;
+    }
+  | {
+      mode: "repl";
+    };
+
+/**
+ * 解析 CLI 启动模式。
+ *
+ * 规则：
+ * - `ca --help/-h`：显示帮助并退出；
+ * - `ca "<问题>"`：单次提问模式；
+ * - `ca`：进入 REPL 多轮模式。
+ */
+function resolveCliMode(args: string[]): CliMode {
+  const firstArg = args[0]?.trim();
+  if (firstArg === "--help" || firstArg === "-h") {
+    return { mode: "help" };
+  }
+
+  const prompt = args.join(" ").trim();
+  if (!prompt) {
+    return { mode: "repl" };
+  }
+
+  return {
+    mode: "single",
+    prompt
+  };
 }
 
 async function main(): Promise<void> {
@@ -30,11 +64,9 @@ async function main(): Promise<void> {
    */
   setDefaultResultOrder((process.env.DNS_RESULT_ORDER as "ipv4first" | "verbatim" | undefined) ?? "ipv4first");
 
-  // 将命令行余下参数拼接为一个问题字符串，兼容多词输入场景。
-  const prompt = process.argv.slice(2).join(" ").trim();
-  if (!prompt) {
+  const cliMode = resolveCliMode(process.argv.slice(2));
+  if (cliMode.mode === "help") {
     printUsage();
-    process.exitCode = 1;
     return;
   }
 
@@ -56,8 +88,14 @@ async function main(): Promise<void> {
       config,
       toolRegistry
     });
-    const answer = await engine.run(prompt);
-    console.log(answer);
+
+    if (cliMode.mode === "single") {
+      const answer = await engine.run(cliMode.prompt);
+      printAnswer(answer);
+      return;
+    }
+
+    await startRepl(engine);
   } catch (error) {
     /**
      * 统一错误出口：
@@ -66,7 +104,7 @@ async function main(): Promise<void> {
      * - 以非 0 退出码向上游脚本明确失败状态。
      */
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[ca] ${message}`);
+    printError(message);
     process.exitCode = 1;
   }
 }

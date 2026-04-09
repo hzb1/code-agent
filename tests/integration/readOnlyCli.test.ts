@@ -15,7 +15,11 @@ const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
 const projectRoot = path.resolve(currentDir, "../..");
 
-function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): Promise<CommandResult> {
+function runNodeCommand(
+  args: string[],
+  extraEnv: Record<string, string> = {},
+  stdinInput?: string
+): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
       cwd: projectRoot,
@@ -24,6 +28,11 @@ function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): 
         ...extraEnv
       }
     });
+
+    if (typeof stdinInput === "string") {
+      child.stdin.write(stdinInput);
+      child.stdin.end();
+    }
 
     let stdout = "";
     let stderr = "";
@@ -45,12 +54,21 @@ function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): 
   });
 }
 
-test("readOnlyCli: 未提供问题时输出用法并返回非 0 退出码", async () => {
-  const result = await runNodeCommand(["--import", "tsx", "src/cli/index.ts"]);
+test("readOnlyCli: 未提供问题时进入 REPL，并支持 exit 退出", async () => {
+  const result = await runNodeCommand(
+    ["--import", "tsx", "src/cli/index.ts"],
+    {
+      LLM_PROVIDER: "qwen",
+      LLM_API_KEY: "test-key",
+      LLM_BASE_URL: "https://example.com",
+      LLM_MODEL: "test-model"
+    },
+    "exit\n"
+  );
 
-  assert.equal(result.code, 1);
-  assert.equal(result.stdout.trim(), "");
-  assert.match(result.stderr, /用法：ca "<问题>"/);
+  assert.equal(result.code, 0);
+  assert.match(result.stderr, /已进入 REPL 多轮模式/);
+  assert.match(result.stderr, /已退出 REPL/);
 });
 
 test("readOnlyCli: 能走完真实 CLI -> 假 Provider -> read_file -> 最终答案链路", async () => {

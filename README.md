@@ -135,6 +135,18 @@ npm run format
 npm run start -- "解释 package.json"
 ```
 
+进入 REPL 多轮模式：
+```bash
+ca
+```
+
+REPL 内置命令：
+- `/help`
+- `/session`
+- `/last`
+- `clear`
+- `exit` / `quit`
+
 开发模式：
 ```bash
 npm run dev -- "这个项目是做什么的"
