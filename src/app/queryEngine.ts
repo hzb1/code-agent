@@ -5,7 +5,7 @@ import type { AssistantToolCall, Message } from "../core/message.js";
 import type { LlmFunctionTool } from "../llm/types.js";
 import { queryLoop } from "../loop/queryLoop.js";
 import type { QueryDebugEvent, QueryDebugEventHandler, QueryLoopResult, QueryLoopRunner } from "../loop/types.js";
-import type { QuerySessionState, SessionReadFileCacheEntry } from "../session/types.js";
+import type { PersistedSessionV1, QuerySessionState, SessionReadFileCacheEntry } from "../session/types.js";
 import { listTools } from "../tools/registry.js";
 import type { ToolDefinition } from "../tools/types.js";
 
@@ -39,6 +39,7 @@ const DEFAULT_SYSTEM_PROMPT = [
 export type QueryEngineOptions = {
   config: AppConfig;
   toolRegistry: Map<string, ToolDefinition>;
+  restoredSession?: PersistedSessionV1;
   systemPrompt?: string;
   debug?: boolean;
   showConversation?: boolean;
@@ -225,15 +226,27 @@ export class QueryEngine {
     this.showConversation = options.showConversation ?? process.env.CA_SHOW_CHAT_TRACE !== "0";
     this.onDebugEvent = options.onDebugEvent;
     this.queryLoopRunner = options.queryLoopRunner ?? queryLoop;
+    const restoredSession = options.restoredSession;
 
-    this.sessionId = randomUUID();
+    this.sessionId = restoredSession?.sessionId ?? randomUUID();
     this.cwd = this.config.projectRoot;
     this.model = this.config.model;
-    this.createdAt = Date.now();
-    this.updatedAt = this.createdAt;
-    this.turnCount = 0;
-    this.mutableMessages = [];
+    this.createdAt = restoredSession?.createdAt ?? Date.now();
+    this.updatedAt = restoredSession?.updatedAt ?? this.createdAt;
+    this.turnCount = restoredSession?.turnCount ?? 0;
+    this.mutableMessages = restoredSession ? cloneMessages(restoredSession.messages) : [];
     this.readOnlyFileCache = new Map<string, SessionReadFileCacheEntry>();
+
+    /**
+     * 恢复会话后，立即从历史消息重建 readOnlyCache。
+     *
+     * 说明：
+     * - v1 存储结构不单独落 readOnlyCache，避免冗余；
+     * - 重建逻辑复用现有索引函数，保持单一来源。
+     */
+    if (this.mutableMessages.length > 0) {
+      this.updateReadOnlyFileCacheFromNewMessages(0);
+    }
   }
 
   /**
@@ -430,6 +443,22 @@ export class QueryEngine {
       readOnlyCache: {
         readFiles
       }
+    };
+  }
+
+  /**
+   * 导出可持久化的会话快照（Session Storage v1）。
+   */
+  exportPersistedSession(): PersistedSessionV1 {
+    return {
+      version: 1,
+      sessionId: this.sessionId,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      cwd: this.cwd,
+      model: this.model,
+      turnCount: this.turnCount,
+      messages: cloneMessages(this.mutableMessages)
     };
   }
 }

@@ -69,3 +69,29 @@ export type QuerySessionState = {
   messageCount: number;
   readOnlyCache: QuerySessionReadOnlyCache;
 };
+
+/**
+ * Session Storage v1 固定版本号。
+ *
+ * 说明：
+ * - 首版采用单文件 JSON 存储；
+ * - 显式版本号可为后续结构升级提供兼容入口。
+ */
+export type SessionStorageVersion = 1;
+
+/**
+ * 会话持久化快照（v1）。
+ *
+ * 这是磁盘存储结构，不等同于 QueryEngine 内部运行态。
+ */
+export type PersistedSessionV1 = {
+  version: SessionStorageVersion;
+  sessionId: string;
+  createdAt: number;
+  updatedAt: number;
+  cwd: string;
+  model: string;
+  turnCount: number;
+  messages: Message[];
+};
+import type { Message } from "../core/message.js";

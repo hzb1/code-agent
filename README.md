@@ -140,12 +140,20 @@ npm run start -- "解释 package.json"
 ca
 ```
 
+运行基础诊断（配置/目录/模型组合）：
+```bash
+ca doctor
+```
+
 REPL 内置命令：
 - `/help`
 - `/session`
 - `/last`
 - `clear`
 - `exit` / `quit`
+
+REPL 会自动保存最近会话，并在下次进入同目录 REPL 时尝试恢复。
+如果你想丢弃恢复数据，可在 REPL 中执行 `clear` 后退出。
 
 开发模式：
 ```bash

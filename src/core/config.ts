@@ -1,7 +1,17 @@
 import path from "node:path";
 import { ConfigError } from "./errors.js";
 
-export type LlmProvider = "deepseek" | "zhipu" | "qwen" | "bytedance";
+/**
+ * 支持的 Provider 白名单。
+ *
+ * 为什么要导出常量而不是散落字符串：
+ * - 让 CLI 启动、doctor 诊断、测试都复用同一数据源；
+ * - 避免“启动支持了新 provider，但 doctor 还没更新”的规则漂移问题；
+ * - 便于后续扩展 provider 时只改一处。
+ */
+export const SUPPORTED_LLM_PROVIDERS = ["deepseek", "zhipu", "qwen", "bytedance"] as const;
+
+export type LlmProvider = (typeof SUPPORTED_LLM_PROVIDERS)[number];
 
 /**
  * 全局运行配置：由环境变量解析后得到，供 agent/llm/tool 统一使用。
@@ -54,6 +64,30 @@ const DEFAULT_MAX_FILE_CHARS = 10_000;
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 /**
+ * 判断字符串是否属于受支持 provider。
+ *
+ * 这层小函数的价值在于：
+ * - 把 “字符串 -> LlmProvider” 的收敛逻辑集中；
+ * - 供 loadConfig 与 doctor 共用，确保行为一致。
+ */
+export function isLlmProvider(value: string): value is LlmProvider {
+  return SUPPORTED_LLM_PROVIDERS.some((provider) => provider === value);
+}
+
+/**
+ * 获取 provider 默认配置（baseUrl / model）。
+ *
+ * 返回只读拷贝，避免调用方误改全局默认值对象。
+ */
+export function getProviderDefaultConfig(provider: LlmProvider): { baseUrl: string; model?: string } {
+  const defaults = PROVIDER_DEFAULTS[provider];
+  return {
+    baseUrl: defaults.baseUrl,
+    model: defaults.model
+  };
+}
+
+/**
  * 解析正整数配置项。
  *
  * 处理策略：
@@ -87,12 +121,12 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
  */
 function parseProvider(raw: string | undefined): LlmProvider {
   const provider = raw?.trim().toLowerCase() ?? DEFAULT_PROVIDER;
-  if (provider === "deepseek" || provider === "zhipu" || provider === "qwen" || provider === "bytedance") {
+  if (isLlmProvider(provider)) {
     return provider;
   }
 
   throw new ConfigError(
-    `不支持的 LLM_PROVIDER '${raw}'。可选值：deepseek、zhipu、qwen、bytedance。`
+    `不支持的 LLM_PROVIDER '${raw}'。可选值：${SUPPORTED_LLM_PROVIDERS.join("、")}。`
   );
 }
 
@@ -168,7 +202,7 @@ export function loadConfig(): AppConfig {
    * 这样设计可以确保 provider 相关默认值始终可预测。
    */
   const provider = parseProvider(process.env.LLM_PROVIDER);
-  const providerDefault = PROVIDER_DEFAULTS[provider];
+  const providerDefault = getProviderDefaultConfig(provider);
   const baseUrl = normalizeBaseUrl(trimOrUndefined(process.env.LLM_BASE_URL) ?? providerDefault.baseUrl);
   const model = trimOrUndefined(process.env.LLM_MODEL) ?? providerDefault.model;
 

@@ -4,8 +4,12 @@ import "dotenv/config";
 import { setDefaultResultOrder } from "node:dns";
 import { QueryEngine } from "../app/queryEngine.js";
 import { loadConfig } from "../core/config.js";
+import { SessionStorageCache } from "../session/cache.js";
+import { loadLatestSession } from "../session/storage.js";
+import type { PersistedSessionV1 } from "../session/types.js";
 import { createToolRegistry } from "../tools/registry.js";
-import { printAnswer, printError, printUsage } from "./output.js";
+import { runDoctor } from "./doctor.js";
+import { printAnswer, printError, printSystem, printUsage } from "./output.js";
 import { startRepl } from "./repl.js";
 
 /**
@@ -30,6 +34,9 @@ type CliMode =
     }
   | {
       mode: "repl";
+    }
+  | {
+      mode: "doctor";
     };
 
 /**
@@ -37,6 +44,7 @@ type CliMode =
  *
  * 规则：
  * - `ca --help/-h`：显示帮助并退出；
+ * - `ca doctor`：执行基础诊断；
  * - `ca "<问题>"`：单次提问模式；
  * - `ca`：进入 REPL 多轮模式。
  */
@@ -44,6 +52,9 @@ function resolveCliMode(args: string[]): CliMode {
   const firstArg = args[0]?.trim();
   if (firstArg === "--help" || firstArg === "-h") {
     return { mode: "help" };
+  }
+  if (firstArg === "doctor") {
+    return { mode: "doctor" };
   }
 
   const prompt = args.join(" ").trim();
@@ -71,6 +82,11 @@ async function main(): Promise<void> {
   }
 
   try {
+    if (cliMode.mode === "doctor") {
+      process.exitCode = await runDoctor(process.cwd());
+      return;
+    }
+
     /**
      * 当前骨架阶段下，CLI 只做“配置初始化 + Engine 调度”。
      *
@@ -84,18 +100,41 @@ async function main(): Promise<void> {
       rootDir: config.projectRoot,
       maxFileChars: config.maxFileChars
     });
-    const engine = new QueryEngine({
-      config,
-      toolRegistry
-    });
-
     if (cliMode.mode === "single") {
+      const engine = new QueryEngine({
+        config,
+        toolRegistry
+      });
       const answer = await engine.run(cliMode.prompt);
       printAnswer(answer);
       return;
     }
 
-    await startRepl(engine);
+    const storageCache = new SessionStorageCache();
+    let restoredSession: PersistedSessionV1 | undefined;
+    let restoredFromStorage = false;
+    try {
+      const loaded = await loadLatestSession(config.projectRoot, storageCache);
+      if (loaded) {
+        restoredSession = loaded;
+        restoredFromStorage = true;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      printError(message);
+      printSystem("将忽略损坏会话，启动新会话。");
+    }
+
+    const engine = new QueryEngine({
+      config,
+      toolRegistry,
+      restoredSession
+    });
+    await startRepl(engine, {
+      projectRoot: config.projectRoot,
+      restoredFromStorage,
+      sessionStorageCache: storageCache
+    });
   } catch (error) {
     /**
      * 统一错误出口：

@@ -9,6 +9,7 @@ export function printUsage(): void {
   console.error("用法：");
   console.error('  ca "<问题>"      单次提问');
   console.error("  ca               进入 REPL 多轮对话");
+  console.error("  ca doctor        运行基础诊断");
   console.error("  ca --help        查看帮助");
 }
 

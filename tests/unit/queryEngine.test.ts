@@ -5,6 +5,7 @@ import { ConfigError } from "../../src/core/errors.js";
 import type { Message } from "../../src/core/message.js";
 import { QueryEngine } from "../../src/app/queryEngine.js";
 import type { QueryDebugEvent, QueryLoopParams } from "../../src/loop/types.js";
+import type { PersistedSessionV1 } from "../../src/session/types.js";
 import type { ToolDefinition } from "../../src/tools/types.js";
 
 function createBaseConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -368,4 +369,95 @@ test("QueryEngine: 会从本轮 read_file 工具结果更新 readOnlyCache", asy
   assert.equal(firstEntry?.readCount, 2);
   assert.equal(firstEntry?.truncated, true);
   assert.equal(firstEntry?.lastContentChars, "hello world".length);
+});
+
+test("QueryEngine: 支持从 restoredSession 恢复会话状态", () => {
+  const restoredSession: PersistedSessionV1 = {
+    version: 1,
+    sessionId: "session-restored-1",
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_500,
+    cwd: "/tmp/project",
+    model: "test-model",
+    turnCount: 2,
+    messages: [
+      { role: "system", content: "system prompt" },
+      { role: "user", content: "first question" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: "call-restore",
+            type: "function",
+            function: {
+              name: "read_file",
+              arguments: "{\"path\":\"README.md\"}"
+            }
+          }
+        ]
+      },
+      {
+        role: "tool",
+        toolCallId: "call-restore",
+        content: JSON.stringify({
+          path: "README.md",
+          resolvedPath: "/tmp/project/README.md",
+          truncated: false,
+          content: "hello"
+        })
+      },
+      { role: "assistant", content: "done" }
+    ]
+  };
+
+  const engine = new QueryEngine({
+    config: createBaseConfig(),
+    toolRegistry: createReadOnlyToolRegistry(),
+    restoredSession,
+    queryLoopRunner: async () => ({
+      finalText: "ok",
+      loopCount: 1,
+      appendedMessages: [{ role: "assistant", content: "ok" }]
+    })
+  });
+
+  const state = engine.getSessionState();
+  assert.equal(state.sessionId, restoredSession.sessionId);
+  assert.equal(state.createdAt, restoredSession.createdAt);
+  assert.equal(state.updatedAt, restoredSession.updatedAt);
+  assert.equal(state.turnCount, restoredSession.turnCount);
+  assert.equal(state.messageCount, restoredSession.messages.length);
+  assert.equal(state.readOnlyCache.readFiles.length, 1);
+  assert.equal(state.readOnlyCache.readFiles[0]?.path, "README.md");
+});
+
+test("QueryEngine: exportPersistedSession 返回可持久化快照", async () => {
+  const engine = new QueryEngine({
+    config: createBaseConfig(),
+    toolRegistry: createReadOnlyToolRegistry(),
+    queryLoopRunner: async () => ({
+      finalText: "ok",
+      loopCount: 1,
+      appendedMessages: [
+        {
+          role: "assistant",
+          content: "ok"
+        }
+      ]
+    })
+  });
+
+  await engine.runOnce("hello");
+  const persisted = engine.exportPersistedSession();
+
+  assert.equal(persisted.version, 1);
+  assert.equal(typeof persisted.sessionId, "string");
+  assert.equal(persisted.cwd, "/tmp/project");
+  assert.equal(persisted.model, "test-model");
+  assert.equal(persisted.turnCount, 1);
+  assert.equal(persisted.messages.length, 3);
+  assert.equal(persisted.messages[0]?.role, "system");
+  assert.equal(persisted.messages[1]?.role, "user");
+  assert.equal(persisted.messages[2]?.role, "assistant");
 });

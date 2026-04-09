@@ -1,11 +1,19 @@
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import type { QueryEngine } from "../app/queryEngine.js";
+import { SessionStorageCache } from "../session/cache.js";
+import { clearLatestSession, saveLatestSession } from "../session/storage.js";
 import { printAnswer, printError, printReplHelp, printReplWelcome, printSessionSummary, printSystem } from "./output.js";
 
 const REPL_PROMPT = "ca> ";
 
 export type ReplControlCommand = "none" | "help" | "session" | "last" | "clear" | "exit";
+
+export type StartReplOptions = {
+  projectRoot: string;
+  restoredFromStorage?: boolean;
+  sessionStorageCache?: SessionStorageCache;
+};
 
 /**
  * 解析 REPL 控制命令。
@@ -57,14 +65,25 @@ function toErrorMessage(error: unknown): string {
  * - 控制命令只处理 REPL 行为，不触发模型请求；
  * - 普通文本输入走 `engine.runOnce`，并即时输出回答。
  */
-export async function startRepl(engine: QueryEngine): Promise<void> {
+export async function startRepl(engine: QueryEngine, options: StartReplOptions): Promise<void> {
   const rl = createInterface({
     input: stdin,
     output: stdout
   });
+  const storageCache = options.sessionStorageCache ?? new SessionStorageCache();
   let lastAnswer = "";
 
   printReplWelcome();
+  if (options.restoredFromStorage) {
+    const state = engine.getSessionState();
+    const lastAssistant = [...engine.getMessages()]
+      .reverse()
+      .find((message) => message.role === "assistant" && message.content.trim().length > 0);
+    if (lastAssistant?.role === "assistant") {
+      lastAnswer = lastAssistant.content;
+    }
+    printSystem(`已恢复最近会话（turns=${state.turnCount}, messages=${state.messageCount}）。`);
+  }
 
   try {
     while (true) {
@@ -93,11 +112,27 @@ export async function startRepl(engine: QueryEngine): Promise<void> {
       }
       if (command === "clear") {
         engine.clearMessages();
+        lastAnswer = "";
+        try {
+          await clearLatestSession(options.projectRoot, storageCache);
+        } catch (error) {
+          printError(`清理会话文件失败：${toErrorMessage(error)}`);
+        }
         console.clear();
         printSystem("已清空当前会话。");
         continue;
       }
       if (command === "exit") {
+        const state = engine.getSessionState();
+        try {
+          if (state.messageCount > 0) {
+            await saveLatestSession(options.projectRoot, engine.exportPersistedSession(), storageCache);
+          } else {
+            await clearLatestSession(options.projectRoot, storageCache);
+          }
+        } catch (error) {
+          printError(`退出前处理会话失败：${toErrorMessage(error)}`);
+        }
         printSystem("已退出 REPL。");
         return;
       }
@@ -105,6 +140,11 @@ export async function startRepl(engine: QueryEngine): Promise<void> {
       try {
         const answer = await engine.runOnce(userInput);
         lastAnswer = answer;
+        try {
+          await saveLatestSession(options.projectRoot, engine.exportPersistedSession(), storageCache);
+        } catch (error) {
+          printError(`保存会话失败：${toErrorMessage(error)}`);
+        }
         printAnswer(answer);
       } catch (error) {
         printError(toErrorMessage(error));
