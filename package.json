@@ -1,6 +1,6 @@
 {
   "name": "code-agent",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "CLI agent that can read local project files through tool calling.",
   "type": "module",

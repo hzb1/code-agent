@@ -12,10 +12,13 @@
 - `/Users/huzhibin/code/my/ai/claude-code-fork`
 
 ## 这个仓库现在是什么
-当前仓库已经有一份可以运行的早期原型，具备：
+当前仓库已经不只是最早的单次问答原型，而是一个可运行的只读型 CLI Agent（命令行智能体），已经具备：
 - CLI 单次提问
-- 基础 LLM 调用
-- 基础工具调用（当前原型阶段以只读工具为主）
+- REPL（持续聊天模式）
+- 只读检索工具组：`list_files + search_files + read_file`
+- QueryEngine（会话编排器）
+- Session Storage（恢复最近会话）
+- doctor（基础诊断命令）
 - 骨架级调试事件与基础测试
 - 可关闭的过程日志与 HTTP 调试摘要
 - 构建与类型检查流程
@@ -197,8 +200,6 @@ LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
 
 ## 当前原型的边界
 当前代码还不是完整产品，所以你会看到这些能力仍在版本计划里逐步建设：
-- 更完整的检索工具
-- 多轮 REPL 与恢复
 - 权限模型与 Plan Mode
 - 写文件与命令执行
 - 流式输出与打字机效果
