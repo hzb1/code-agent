@@ -43,7 +43,7 @@ const PROVIDER_DEFAULTS: Record<LlmProvider, { baseUrl: string; model?: string }
   },
   qwen: {
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model: "qwen3-coder-plus"
+    model: "qwen3.6-plus"
   },
   bytedance: {
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3"
