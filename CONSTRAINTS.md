@@ -4,7 +4,7 @@
 本文件是本项目唯一“约束”清单，定义什么能做、什么不能做、做到什么算合格。
 
 版本任务、阶段拆分、里程碑不写在本文件中，统一放在：
-- `docs/version-plan/README.md`
+- `docs/version-plan/版本总览.md`
 - `docs/version-plan/*.md`
 
 ---

@@ -26,7 +26,7 @@
 出现冲突时，按以下顺序决策：
 1. `CONSTRAINTS.md`
 2. `AGENTS.md`
-3. `docs/version-plan/README.md`
+3. `docs/version-plan/版本总览.md`
 4. 当前目标版本文档（例如 `docs/version-plan/v0.1.0.md`）
 5. `docs/产品说明.md`
 6. `README.md`
@@ -43,7 +43,7 @@
 - 不要直接写代码，必须先规划，再编码。
 - 默认执行顺序：
   1. 读取 `CONSTRAINTS.md`。
-  2. 读取 `docs/version-plan/README.md`。
+  2. 读取 `docs/version-plan/版本总览.md`。
   3. 读取当前目标版本文档。
   4. 读取 `docs/产品说明.md`，确认产品定位与阶段目标。
   5. 阅读本仓库现有实现与必要的参考仓库源码。
@@ -124,7 +124,7 @@
 ## 文档命名约定
 - 普通说明类文档，优先使用中文文件名，降低仓库阅读门槛。
 - 但以下“约定型文件名”默认保留，不应随意改名：
-  - 根目录和目录级 `README.md`
+  - 根目录 `README.md`
   - `AGENTS.md`
   - 版本文档 `v0.x.y.md`
 - 如果未来要调整其它文档文件名，必须同步更新：
