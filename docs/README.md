@@ -47,14 +47,15 @@
 
 ### 4. 版本计划
 - [docs/version-plan/README.md](./version-plan/README.md)
-- [docs/version-plan/覆盖矩阵.md](./version-plan/覆盖矩阵.md)
 - `docs/version-plan/v*.md`
 
 负责：
+- 项目当前走到了哪一步
 - 版本路线
-- 覆盖承诺
+- 每个版本已经做成了什么
 - 每个版本做什么
 - 每个版本能学到什么
+- 覆盖承诺
 - 当前目标版本的执行依据
 
 ### 5. 版本记录
@@ -70,8 +71,8 @@
 ## 推荐阅读顺序
 ### 新加入项目的人
 1. [README.md](../README.md)
-2. [产品说明.md](./产品说明.md)
-3. [docs/version-plan/README.md](./version-plan/README.md)
+2. [docs/version-plan/README.md](./version-plan/README.md)
+3. [产品说明.md](./产品说明.md)
 4. 当前目标版本文档
 5. [变更记录.md](./变更记录.md)
 
@@ -110,6 +111,7 @@
 
 ## 当前建议
 - 日常了解项目：先看 `README.md`
+- 想对外介绍项目做到了什么：看 `docs/version-plan/README.md`
 - 讨论产品方向：看 `产品说明.md`
 - 开发前确认本轮边界：看当前目标版本文档
 - 需要知道“哪些规则不能碰”：看 `CONSTRAINTS.md`

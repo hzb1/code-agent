@@ -145,5 +145,5 @@ src/
 - [CONSTRAINTS.md](./CONSTRAINTS.md)：硬约束与工程边界
 - [docs/README.md](./docs/README.md)：文档导航
 - [docs/产品说明.md](./docs/产品说明.md)：产品定义、目标用户、产品原则
-- [docs/version-plan/README.md](./docs/version-plan/README.md)：版本路线
+- [docs/version-plan/README.md](./docs/version-plan/README.md)：版本总览、版本进度、覆盖承诺与详细版本入口
 - [docs/变更记录.md](./docs/变更记录.md)：版本记录

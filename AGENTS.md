@@ -12,6 +12,11 @@
 当前开发环境中的参考仓库路径：
 - `/Users/huzhibin/code/my/ai/claude-code-fork`
 
+关于这个参考仓库，要明确一点：
+- `claude-code-fork` 不是普通“灵感参考项目”；
+- 它是一个针对 Anthropic 官方 `Claude Code` CLI 的源码反编译 / 逆向还原项目；
+- 因此，在本仓库里提到“参考项目”时，默认指的是一个可直接阅读、可直接学习的源码级主参考。
+
 约束规则来源：`CONSTRAINTS.md`。
 版本执行来源：`docs/version-plan/`。
 
