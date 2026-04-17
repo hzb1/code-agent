@@ -1,100 +1,28 @@
 # Code Agent
 
-本项目是一个本地 Coding Agent 重建项目。
+## 项目简介
+`Code Agent` 是一个本地 CLI Coding Agent（命令行代码助手）项目。
 
-它的目标不是停留在当前这份原型代码上，而是：
-- 以本地参考项目 `claude-code-fork` 为主参考；
-- 当前命令行体验优先参考 `claude-code`；
-- 未来桌面端体验参考 Mac 版 `Codex`；
-- 逐步做出一个同类、完整、可用的 Coding Agent 产品。
+当前以代码理解、项目检索和多轮问答为主。
 
-当前开发环境中的参考仓库路径：
-- `/Users/huzhibin/code/my/ai/claude-code-fork`
+## 使用说明
+### 1. 克隆项目
+```bash
+git clone <你的仓库地址> code-agent
+cd code-agent
+```
 
-## 这个仓库现在是什么
-当前仓库已经不只是最早的单次问答原型，而是一个可运行的只读型 CLI Agent（命令行智能体），已经具备：
-- CLI 单次提问
-- REPL（持续聊天模式）
-- 只读检索工具组：`list_files + search_files + read_file`
-- QueryEngine（会话编排器）
-- Session Storage（恢复最近会话）
-- doctor（基础诊断命令）
-- 骨架级调试事件与基础测试
-- 可关闭的过程日志与 HTTP 调试摘要
-- 构建与类型检查流程
-
-但要注意：
-- 这份实现不是最终产品定义；
-- 当前结构不是长期架构答案；
-- 后续会按照版本计划持续重构、替换、扩展。
-
-## 这个仓库最终要做成什么
-最终目标是做成一个完整的 Coding Agent 产品。
-
-分阶段看：
-- 当前主线是本地 CLI Coding Agent；
-- 未来如果进入桌面端阶段，再让桌面体验向 Mac 版 `Codex` 靠近。
-
-当前主线下的核心能力包括：
-- 多入口 CLI
-- REPL 与多轮会话
-- QueryEngine
-- QueryLoop / Agentic Loop
-- Tool System
-- 权限模型与 Plan Mode
-- 流式输出与打字机效果
-- 项目上下文系统与项目记忆
-- Provider 适配层
-- 工具编排与历史记录
-- MCP / Skills / 扩展基础
-- 后台会话、恢复、守护进程
-- 子 Agent 与高级上下文管理
-- 测试、诊断、观测、发布工程
-
-## 主参考与主文档
-### 主参考
-- 工程实现主参考：`claude-code-fork`
-- 命令行体验参考：`claude-code`
-- 未来桌面端体验参考：Mac 版 `Codex`
-
-### 先读哪些文档
-建议阅读顺序：
-1. [CONSTRAINTS.md](/Users/huzhibin/code/my/ai/code-agent/CONSTRAINTS.md)
-2. [AGENTS.md](/Users/huzhibin/code/my/ai/code-agent/AGENTS.md)
-3. [版本计划总览](/Users/huzhibin/code/my/ai/code-agent/docs/version-plan/README.md)
-4. [覆盖矩阵](/Users/huzhibin/code/my/ai/code-agent/docs/version-plan/COVERAGE.md)
-5. 当前目标版本文档
-6. [PRODUCT.md](/Users/huzhibin/code/my/ai/code-agent/PRODUCT.md)
-
-## 版本推进方式
-本项目现在采用“主版本 + 补丁版本”推进：
-- `0.x.0`：引入新的能力边界
-- `0.x.1`：不引入新的能力边界，只做稳定化、测试、重构、文档收口、交互优化
-- `1.0.0`：完成参考项目核心骨架与核心能力覆盖，达到同类 CLI 产品完成版
-
-当前正式版本线从 `0.1.0` 开始，详细见：
-- [docs/version-plan/README.md](/Users/huzhibin/code/my/ai/code-agent/docs/version-plan/README.md)
-
-## 中途可用里程碑
-不是等到 `1.0.0` 才第一次可用，而是按阶段变得可用：
-- `v0.2.1`：只读可用版
-- `v0.3.1`：安全改动可用版
-- `v0.4.1`：个人主力可用版
-- `v0.9.0`：发布候选版
-- `v1.0.0`：完成版
-
-## 快速开始（基于当前原型）
-### 1. 安装依赖
+### 2. 安装依赖
 ```bash
 npm install
 ```
 
-### 2. 配置环境变量
+### 3. 配置环境变量
 ```bash
 cp .env.example .env
 ```
 
-示例：
+最小示例：
 ```env
 LLM_PROVIDER=qwen
 LLM_API_KEY=your_api_key
@@ -102,115 +30,120 @@ LLM_MODEL=qwen3-coder-plus
 MAX_AGENT_LOOPS=12
 ```
 
-当前原型支持的 provider：
+当前支持的 provider（模型提供方）：
 - `qwen`
 - `zhipu`
 - `deepseek`
 - `bytedance`
 
-### 3. 构建
+### 4. 构建项目
 ```bash
 npm run build
 ```
 
-### 4. 类型检查
-```bash
-npm run typecheck
-```
-
-### 5. Lint（Biome）
-```bash
-npm run lint
-```
-
-自动修复：
-```bash
-npm run lint:fix
-```
-
-格式化：
-```bash
-npm run format
-```
-
-### 6. 运行
+### 5. 启动运行
 ```bash
 npm run start -- "解释 package.json"
 ```
 
-进入 REPL 多轮模式：
+如果你希望直接使用 `ca` 命令，可以在构建后执行：
 ```bash
-ca
+npm link
 ```
 
-运行基础诊断（配置/目录/模型组合）：
+## Quick Start（快速开始）
+### 基础命令
+用于确认项目能正常构建、检查类型和跑测试：
+
 ```bash
+npm run build
+npm run typecheck
+npm run test
+```
+
+### 启动命令
+用于单次问答、进入 REPL（持续聊天模式）和基础诊断：
+
+```bash
+npm run start -- "解释 package.json"
+ca "解释 package.json"
+ca
 ca doctor
 ```
 
-REPL 内置命令：
-- `/help`
-- `/session`
-- `/last`
-- `clear`
-- `exit` / `quit`
+说明：
+- `npm run start -- "..."` 不依赖全局命令，最稳；
+- `ca` 需要先执行一次 `npm link`。
 
-REPL 会自动保存最近会话，并在下次进入同目录 REPL 时尝试恢复。
-如果你想丢弃恢复数据，可在 REPL 中执行 `clear` 后退出。
+### 开发命令
+用于本地开发时直接运行 TypeScript 源码：
 
-开发模式：
 ```bash
 npm run dev -- "这个项目是做什么的"
+npm run start:debug -- "解释 package.json"
+npm run dev:debug -- "解释 package.json"
 ```
 
-默认会在 `stderr` 打印“对话过程”（每轮请求、工具调用、模型回复摘要），便于观察 Agent 在做什么。
+### 调试命令
+用于查看过程日志、HTTP 摘要和调整循环上限：
 
-如果你只想保留最终答案输出，可关闭过程日志：
 ```bash
 CA_SHOW_CHAT_TRACE=0 ca "解释这个项目"
-```
-
-如果你在复杂任务里遇到：
-```text
-[ca] 已达到最大循环次数限制（...）
-```
-可以调大循环上限后重试：
-```bash
+LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
 MAX_AGENT_LOOPS=20 ca "分析这个项目"
 ```
 
-全局命令（推荐）：
+### 工程命令
+用于代码检查与格式化：
+
 ```bash
-npm link
-ca "解释 package.json"
+npm run lint
+npm run lint:fix
+npm run format
+npm run test:unit
+npm run test:integration
 ```
 
-## 直接打印 HTTP 调试日志
-如果你不想再折腾 Charles，也可以直接让 CLI 打印 LLM 请求/响应摘要。
-
-开启方式：
-```bash
-LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
+### REPL（持续聊天模式）内置命令
+```text
+/help
+/session
+/last
+clear
+exit
+quit
 ```
 
-说明：
-- 会按 `Request` / `Response` 分段打印请求 URL、model、消息摘要、工具摘要、响应状态码和响应片段；
-- `Authorization` 会自动脱敏，不会直接打印完整 key；
-- 这更适合排查“发了什么”“回了什么”，读起来也更接近浏览器 Network 面板。
+补充说明：
+- REPL 会自动保存最近会话；
+- 下次进入同目录 REPL 时会尝试恢复最近会话；
+- 如果你想丢弃恢复数据，可在 REPL 中执行 `clear` 后退出。
 
-## 当前原型的边界
-当前代码还不是完整产品，所以你会看到这些能力仍在版本计划里逐步建设：
-- 权限模型与 Plan Mode
-- 写文件与命令执行
-- 流式输出与打字机效果
-- 上下文系统与项目记忆
-- Provider 适配层
-- MCP / Skills / 扩展基础
-- 后台会话与子 Agent
+## 项目结构说明
+### 目录结构
+```text
+src/
+├─ cli/        # 命令入口、REPL、输出、doctor
+├─ app/        # QueryEngine（会话编排器）
+├─ loop/       # QueryLoop（单轮智能体循环）
+├─ tools/      # 工具系统与工具注册
+├─ llm/        # 模型请求与 Provider（模型提供方）接入
+├─ session/    # Session Storage（会话保存与恢复）
+└─ core/       # 配置、消息模型、错误类型等基础设施
+```
 
-所以：
-- 不要把当前仓库结构看成最终设计；
-- 以版本计划为准，逐步演进。
+### 关键入口文件
+- `src/cli/index.ts`：CLI 主入口，负责区分单次问答、REPL（持续聊天模式）和 `doctor`
+- `src/app/queryEngine.ts`：`QueryEngine（会话编排器）`，负责组织一个会话
+- `src/loop/queryLoop.ts`：`QueryLoop（单轮智能体循环）`，负责“模型 -> 工具 -> 继续/结束”
+- `src/tools/registry.ts`：工具注册入口，当前接入只读工具三件套
+- `src/llm/chatClient.ts`：模型请求、Provider（模型提供方）接入和 HTTP 调试输出
+- `src/session/storage.ts`：最近会话的保存与恢复
 
-## 说明
-- 当前仅保留 `docs/version-plan/` 下的正式版本计划文档作为执行依据。
+## 相关文档
+- [AGENTS.md](./AGENTS.md)：AI 代理（如 Codex）的执行方式
+- [CONSTRAINTS.md](./CONSTRAINTS.md)：硬约束与工程边界
+- [docs/README.md](./docs/README.md)：文档导航
+- [docs/产品说明.md](./docs/产品说明.md)：产品定义、目标用户、产品原则
+- [docs/version-plan/README.md](./docs/version-plan/README.md)：版本路线
+- [docs/变更记录.md](./docs/变更记录.md)：版本记录
