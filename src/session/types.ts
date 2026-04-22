@@ -1,3 +1,5 @@
+import type { Message } from "#src/core/message.js";
+
 /**
  * Session 层共享类型定义。
  *
@@ -94,4 +96,3 @@ export type PersistedSessionV1 = {
   turnCount: number;
   messages: Message[];
 };
-import type { Message } from "../core/message.js";

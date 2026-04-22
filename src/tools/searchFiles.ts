@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import path from "node:path";
-import type { ToolDefinition } from "./types.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
  * search_files 工具：

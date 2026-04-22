@@ -1,5 +1,5 @@
-import type { AssistantToolCall, Message } from "../core/message.js";
-import type { PersistedSessionV1 } from "./types.js";
+import type { AssistantToolCall, Message } from "#src/core/message.js";
+import type { PersistedSessionV1 } from "#src/session/types.js";
 
 /**
  * 统一对象守卫：只接受“普通对象”，拒绝 null/数组。

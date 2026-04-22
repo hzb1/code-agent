@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AppConfig } from "../../src/core/config.js";
-import { ConfigError } from "../../src/core/errors.js";
-import type { Message } from "../../src/core/message.js";
-import { QueryEngine } from "../../src/app/queryEngine.js";
-import type { QueryDebugEvent, QueryLoopParams } from "../../src/loop/types.js";
-import type { PersistedSessionV1 } from "../../src/session/types.js";
-import type { ToolDefinition } from "../../src/tools/types.js";
+import { QueryEngine } from "#src/app/queryEngine.js";
+import type { AppConfig } from "#src/core/config.js";
+import { ConfigError } from "#src/core/errors.js";
+import type { Message } from "#src/core/message.js";
+import type { QueryDebugEvent, QueryLoopParams } from "#src/loop/types.js";
+import type { PersistedSessionV1 } from "#src/session/types.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 function createBaseConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {

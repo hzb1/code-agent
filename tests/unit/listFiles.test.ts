@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createListFilesTool } from "../../src/tools/listFiles.js";
+import { createListFilesTool } from "#src/tools/listFiles.js";
 
 async function createTempProject(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "code-agent-list-files-"));

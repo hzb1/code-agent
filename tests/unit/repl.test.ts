@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isReadlineClosedError, parseReplControlCommand } from "../../src/cli/repl.js";
+import { isReadlineClosedError, parseReplControlCommand } from "#src/cli/repl.js";
 
 test("repl: parseReplControlCommand 识别控制命令", () => {
   assert.equal(parseReplControlCommand("/help"), "help");

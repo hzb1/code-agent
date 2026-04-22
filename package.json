@@ -4,21 +4,27 @@
   "private": true,
   "description": "CLI agent that can read local project files through tool calling.",
   "type": "module",
+  "imports": {
+    "#src/*": {
+      "source": "./src/*",
+      "default": "./dist/*"
+    }
+  },
   "bin": {
     "ca": "dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsx src/cli/index.ts",
-    "dev:debug": "CODE_AGENT_DEBUG=1 tsx src/cli/index.ts",
+    "dev": "NODE_OPTIONS='--conditions=source' tsx src/cli/index.ts",
+    "dev:debug": "CODE_AGENT_DEBUG=1 NODE_OPTIONS='--conditions=source' tsx src/cli/index.ts",
     "format": "biome format --write src",
     "lint": "biome lint src",
     "lint:fix": "biome lint --write src",
     "start": "node dist/cli/index.js",
     "start:debug": "CODE_AGENT_DEBUG=1 node dist/cli/index.js",
-    "test": "node --import tsx --test tests/**/*.test.ts",
-    "test:integration": "node --import tsx --test tests/integration/**/*.test.ts",
-    "test:unit": "node --import tsx --test tests/unit/**/*.test.ts",
+    "test": "node --conditions=source --import tsx --test tests/**/*.test.ts",
+    "test:integration": "node --conditions=source --import tsx --test tests/integration/**/*.test.ts",
+    "test:unit": "node --conditions=source --import tsx --test tests/unit/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

@@ -1,9 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Stats } from "node:fs";
-import type { SessionStorageCache } from "./cache.js";
-import { parsePersistedSessionV1, serializePersistedSessionV1 } from "./serializer.js";
-import type { PersistedSessionV1 } from "./types.js";
+import type { SessionStorageCache } from "#src/session/cache.js";
+import { parsePersistedSessionV1, serializePersistedSessionV1 } from "#src/session/serializer.js";
+import type { PersistedSessionV1 } from "#src/session/types.js";
 
 const SESSION_DIR_NAME = ".code-agent";
 const SESSION_SUB_DIR_NAME = "session";

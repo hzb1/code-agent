@@ -1,9 +1,9 @@
-import { LoopTerminatedError, ProviderError, ToolExecutionError } from "../core/errors.js";
-import type { AssistantMessage, Message, ToolMessage } from "../core/message.js";
-import { createChatCompletion } from "../llm/chatClient.js";
-import type { LlmFunctionCall, LlmMessage } from "../llm/types.js";
-import type { ToolDefinition } from "../tools/types.js";
-import type { QueryDebugEvent, QueryLoopParams, QueryLoopResult } from "./types.js";
+import { LoopTerminatedError, ProviderError, ToolExecutionError } from "#src/core/errors.js";
+import type { AssistantMessage, Message, ToolMessage } from "#src/core/message.js";
+import { createChatCompletion } from "#src/llm/chatClient.js";
+import type { LlmFunctionCall, LlmMessage } from "#src/llm/types.js";
+import type { QueryDebugEvent, QueryLoopParams, QueryLoopResult } from "#src/loop/types.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
  * Debug 日志裁剪阈值。

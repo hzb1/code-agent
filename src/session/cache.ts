@@ -1,4 +1,4 @@
-import type { PersistedSessionV1 } from "./types.js";
+import type { PersistedSessionV1 } from "#src/session/types.js";
 
 type SessionStorageCacheEntry = {
   filePath: string;

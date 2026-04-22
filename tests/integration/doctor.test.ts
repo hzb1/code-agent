@@ -45,7 +45,7 @@ function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): 
 }
 
 test("doctor: 配置完整时返回通过", async () => {
-  const result = await runNodeCommand(["--import", "tsx", "src/cli/index.ts", "doctor"], {
+  const result = await runNodeCommand(["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "doctor"], {
     LLM_PROVIDER: "qwen",
     LLM_API_KEY: "test-key",
     LLM_BASE_URL: "https://example.com/v1",
@@ -60,7 +60,7 @@ test("doctor: 配置完整时返回通过", async () => {
 });
 
 test("doctor: 配置错误时返回非 0 并给出可操作提示", async () => {
-  const result = await runNodeCommand(["--import", "tsx", "src/cli/index.ts", "doctor"], {
+  const result = await runNodeCommand(["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "doctor"], {
     LLM_PROVIDER: "bad-provider",
     LLM_API_KEY: "",
     LLM_BASE_URL: "not-a-url",

@@ -3,9 +3,9 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { SessionStorageCache } from "../../src/session/cache.js";
-import { clearLatestSession, getLatestSessionFilePath, loadLatestSession, saveLatestSession } from "../../src/session/storage.js";
-import type { PersistedSessionV1 } from "../../src/session/types.js";
+import { SessionStorageCache } from "#src/session/cache.js";
+import { clearLatestSession, getLatestSessionFilePath, loadLatestSession, saveLatestSession } from "#src/session/storage.js";
+import type { PersistedSessionV1 } from "#src/session/types.js";
 
 function createSnapshot(overrides: Partial<PersistedSessionV1> = {}): PersistedSessionV1 {
   return {

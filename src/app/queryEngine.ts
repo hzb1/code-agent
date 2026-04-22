@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { AppConfig } from "../core/config.js";
-import { ConfigError } from "../core/errors.js";
-import type { AssistantToolCall, Message } from "../core/message.js";
-import type { LlmFunctionTool } from "../llm/types.js";
-import { queryLoop } from "../loop/queryLoop.js";
-import type { QueryDebugEvent, QueryDebugEventHandler, QueryLoopResult, QueryLoopRunner } from "../loop/types.js";
-import type { PersistedSessionV1, QuerySessionState, SessionReadFileCacheEntry } from "../session/types.js";
-import { listTools } from "../tools/registry.js";
-import type { ToolDefinition } from "../tools/types.js";
+import type { AppConfig } from "#src/core/config.js";
+import { ConfigError } from "#src/core/errors.js";
+import type { AssistantToolCall, Message } from "#src/core/message.js";
+import type { LlmFunctionTool } from "#src/llm/types.js";
+import { queryLoop } from "#src/loop/queryLoop.js";
+import type { QueryDebugEvent, QueryDebugEventHandler, QueryLoopResult, QueryLoopRunner } from "#src/loop/types.js";
+import type { PersistedSessionV1, QuerySessionState, SessionReadFileCacheEntry } from "#src/session/types.js";
+import { listTools } from "#src/tools/registry.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
  * QueryEngine：一次会话（session）级编排层。

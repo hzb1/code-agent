@@ -1,6 +1,6 @@
-import type { AppConfig } from "../core/config.js";
-import { ProviderError } from "../core/errors.js";
-import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload } from "./types.js";
+import type { AppConfig } from "#src/core/config.js";
+import { ProviderError } from "#src/core/errors.js";
+import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload } from "#src/llm/types.js";
 
 /**
  * 本文件负责：

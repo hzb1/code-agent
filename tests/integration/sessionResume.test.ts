@@ -107,7 +107,7 @@ test("sessionResume: REPL 退出后可恢复最近会话并继续查看 /last", 
     };
 
     const firstRun = await runNodeCommand({
-      args: ["--import", tsxLoaderPath, cliEntryPath],
+      args: ["--conditions", "source", "--import", tsxLoaderPath, cliEntryPath],
       cwd: tempCwd,
       env,
       stdinInput: "第一问\nexit\n"
@@ -118,7 +118,7 @@ test("sessionResume: REPL 退出后可恢复最近会话并继续查看 /last", 
     assert.match(firstRun.stderr, /已退出 REPL/);
 
     const secondRun = await runNodeCommand({
-      args: ["--import", tsxLoaderPath, cliEntryPath],
+      args: ["--conditions", "source", "--import", tsxLoaderPath, cliEntryPath],
       cwd: tempCwd,
       env,
       stdinInput: "/session\n/last\nexit\n"

@@ -1,9 +1,9 @@
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
-import type { QueryEngine } from "../app/queryEngine.js";
-import { SessionStorageCache } from "../session/cache.js";
-import { clearLatestSession, saveLatestSession } from "../session/storage.js";
-import { printAnswer, printError, printReplHelp, printReplWelcome, printSessionSummary, printSystem } from "./output.js";
+import type { QueryEngine } from "#src/app/queryEngine.js";
+import { printAnswer, printError, printReplHelp, printReplWelcome, printSessionSummary, printSystem } from "#src/cli/output.js";
+import { SessionStorageCache } from "#src/session/cache.js";
+import { clearLatestSession, saveLatestSession } from "#src/session/storage.js";
 
 const REPL_PROMPT = "ca> ";
 

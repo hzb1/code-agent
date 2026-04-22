@@ -1,7 +1,7 @@
-import type { ToolDefinition } from "./types.js";
-import { createListFilesTool } from "./listFiles.js";
-import { createReadFileTool } from "./readFile.js";
-import { createSearchFilesTool } from "./searchFiles.js";
+import { createListFilesTool } from "#src/tools/listFiles.js";
+import { createReadFileTool } from "#src/tools/readFile.js";
+import { createSearchFilesTool } from "#src/tools/searchFiles.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
  * 工具注册中心：

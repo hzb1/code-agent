@@ -1,7 +1,7 @@
-import type { AppConfig } from "../core/config.js";
-import type { Message } from "../core/message.js";
-import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload, LlmFunctionTool } from "../llm/types.js";
-import type { ToolDefinition } from "../tools/types.js";
+import type { AppConfig } from "#src/core/config.js";
+import type { Message } from "#src/core/message.js";
+import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload, LlmFunctionTool } from "#src/llm/types.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
  * QueryLoop/QueryEngine 共用的骨架级调试事件类型。

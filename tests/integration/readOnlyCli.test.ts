@@ -56,7 +56,7 @@ function runNodeCommand(
 
 test("readOnlyCli: 未提供问题时进入 REPL，并支持 exit 退出", async () => {
   const result = await runNodeCommand(
-    ["--import", "tsx", "src/cli/index.ts"],
+    ["--conditions", "source", "--import", "tsx", "src/cli/index.ts"],
     {
       LLM_PROVIDER: "qwen",
       LLM_API_KEY: "test-key",
@@ -73,7 +73,7 @@ test("readOnlyCli: 未提供问题时进入 REPL，并支持 exit 退出", async
 
 test("readOnlyCli: REPL 收到 Ctrl+C 时会优雅退出", async (t) => {
   const result = await new Promise<CommandResult>((resolve, reject) => {
-    const child = spawn(process.execPath, ["--import", "tsx", "src/cli/index.ts"], {
+    const child = spawn(process.execPath, ["--conditions", "source", "--import", "tsx", "src/cli/index.ts"], {
       cwd: projectRoot,
       env: {
         ...process.env,
@@ -222,14 +222,17 @@ test("readOnlyCli: 能走完真实 CLI -> 假 Provider -> read_file -> 最终答
     const address = server.address();
     assert.ok(address && typeof address === "object");
 
-    const result = await runNodeCommand(["--import", "tsx", "src/cli/index.ts", "解释 README.md"], {
+    const result = await runNodeCommand(
+      ["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "解释 README.md"],
+      {
       LLM_PROVIDER: "qwen",
       LLM_API_KEY: "test-key",
       LLM_BASE_URL: `http://127.0.0.1:${address.port}`,
       LLM_MODEL: "test-model",
       MAX_AGENT_LOOPS: "3",
       CA_SHOW_CHAT_TRACE: "0"
-    });
+      }
+    );
 
     assert.equal(result.code, 0);
     assert.match(result.stdout, /已读取 README\.md，并确认项目名称为 Code Agent。/);

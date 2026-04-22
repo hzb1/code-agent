@@ -156,6 +156,11 @@ src/
 - `src/llm/chatClient.ts`：模型请求、Provider（模型提供方）接入和 HTTP 调试输出
 - `src/session/storage.ts`：最近会话的保存与恢复
 
+### 导入路径约定
+- 项目内部模块统一使用 `#src/*` 固定别名导入，例如：`import { QueryEngine } from "#src/app/queryEngine.js"`。
+- 不再使用跨目录相对路径（如 `../../`、`../`）导入项目模块。
+- 源码模式（dev/test）通过 `--conditions=source` 解析到 `src/*`，生产模式（start）默认解析到 `dist/*`。
+
 ## 相关文档
 - [AGENTS.md](./AGENTS.md)：AI 代理（如 Codex）的执行方式
 - [CONSTRAINTS.md](./CONSTRAINTS.md)：硬约束与工程边界

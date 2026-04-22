@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { AppConfig } from "../../src/core/config.js";
-import { ProviderError } from "../../src/core/errors.js";
-import { createChatCompletion } from "../../src/llm/chatClient.js";
-import type { LlmCreateChatCompletionPayload } from "../../src/llm/types.js";
+import type { AppConfig } from "#src/core/config.js";
+import { ProviderError } from "#src/core/errors.js";
+import { createChatCompletion } from "#src/llm/chatClient.js";
+import type { LlmCreateChatCompletionPayload } from "#src/llm/types.js";
 
 function createConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {

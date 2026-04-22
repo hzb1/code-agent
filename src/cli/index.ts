@@ -2,15 +2,15 @@
 
 import "dotenv/config";
 import { setDefaultResultOrder } from "node:dns";
-import { QueryEngine } from "../app/queryEngine.js";
-import { loadConfig } from "../core/config.js";
-import { SessionStorageCache } from "../session/cache.js";
-import { loadLatestSession } from "../session/storage.js";
-import type { PersistedSessionV1 } from "../session/types.js";
-import { createToolRegistry } from "../tools/registry.js";
-import { runDoctor } from "./doctor.js";
-import { printAnswer, printError, printSystem, printUsage } from "./output.js";
-import { startRepl } from "./repl.js";
+import { QueryEngine } from "#src/app/queryEngine.js";
+import { runDoctor } from "#src/cli/doctor.js";
+import { printAnswer, printError, printSystem, printUsage } from "#src/cli/output.js";
+import { startRepl } from "#src/cli/repl.js";
+import { loadConfig } from "#src/core/config.js";
+import { SessionStorageCache } from "#src/session/cache.js";
+import { loadLatestSession } from "#src/session/storage.js";
+import type { PersistedSessionV1 } from "#src/session/types.js";
+import { createToolRegistry } from "#src/tools/registry.js";
 
 /**
  * CLI 入口职责：

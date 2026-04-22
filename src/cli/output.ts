@@ -1,4 +1,4 @@
-import type { QuerySessionState } from "../session/types.js";
+import type { QuerySessionState } from "#src/session/types.js";
 
 /**
  * 统一 CLI 用法提示。

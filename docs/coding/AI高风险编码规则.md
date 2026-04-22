@@ -101,6 +101,10 @@ const loopInputMessages = cloneMessages(this.mutableMessages);
 const loopInputMessages = cloneMessages(this.mutableMessages);
 ```
 
+## 8. 不要回退到跨目录相对导入
+
+项目内部模块统一使用 `#src/*` 固定别名导入，不要再引入 `../../`、`../` 这类跨目录路径。这样可以避免重构后导入路径大面积失效，也能降低代码阅读成本。
+
 ## 提交前自检
 
 1. 有没有原地修改函数入参。
@@ -111,3 +115,4 @@ const loopInputMessages = cloneMessages(this.mutableMessages);
 6. 有没有在不确定协议时靠猜字段名和返回结构写代码。
 7. 有没有把改动扩散到当前任务之外。
 8. 测试是否覆盖失败路径、边界和副作用。
+9. 新增或改动导入时，是否使用了 `#src/*` 固定别名而不是跨目录相对路径。

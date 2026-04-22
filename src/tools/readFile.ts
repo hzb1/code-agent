@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ToolDefinition } from "./types.js";
+import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
  * read_file 工具：

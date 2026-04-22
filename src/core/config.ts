@@ -1,5 +1,5 @@
 import path from "node:path";
-import { ConfigError } from "./errors.js";
+import { ConfigError } from "#src/core/errors.js";
 
 /**
  * 支持的 Provider 白名单。

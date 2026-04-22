@@ -147,14 +147,17 @@ test("searchAndRead: 能完成 search_files -> read_file -> 最终回答链路",
     const address = server.address();
     assert.ok(address && typeof address === "object");
 
-    const result = await runNodeCommand(["--import", "tsx", "src/cli/index.ts", "帮我找 CLI 入口文件"], {
-      LLM_PROVIDER: "qwen",
-      LLM_API_KEY: "test-key",
-      LLM_BASE_URL: `http://127.0.0.1:${address.port}`,
-      LLM_MODEL: "test-model",
-      MAX_AGENT_LOOPS: "5",
-      CA_SHOW_CHAT_TRACE: "0"
-    });
+    const result = await runNodeCommand(
+      ["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "帮我找 CLI 入口文件"],
+      {
+        LLM_PROVIDER: "qwen",
+        LLM_API_KEY: "test-key",
+        LLM_BASE_URL: `http://127.0.0.1:${address.port}`,
+        LLM_MODEL: "test-model",
+        MAX_AGENT_LOOPS: "5",
+        CA_SHOW_CHAT_TRACE: "0"
+      }
+    );
 
     assert.equal(result.code, 0);
     assert.match(result.stdout, /CLI 入口文件是 src\/cli\/index\.ts/);

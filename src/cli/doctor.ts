@@ -5,7 +5,7 @@ import {
   isLlmProvider,
   SUPPORTED_LLM_PROVIDERS,
   type LlmProvider
-} from "../core/config.js";
+} from "#src/core/config.js";
 
 type DoctorCheckStatus = "ok" | "warn" | "error";
 

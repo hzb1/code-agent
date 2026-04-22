@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createReadFileTool } from "../../src/tools/readFile.js";
+import { createReadFileTool } from "#src/tools/readFile.js";
 
 async function createTempProject(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "code-agent-read-file-"));
