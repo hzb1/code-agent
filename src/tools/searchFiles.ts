@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
 import path from "node:path";
 import type { ToolDefinition } from "./types.js";
 
@@ -33,6 +34,7 @@ const MAX_ALLOWED_LIMIT = 200;
 const MAX_SCANNED_FILES = 20_000;
 
 const NOISY_DIRECTORY_NAMES = new Set([
+  ".code-agent",
   ".git",
   "node_modules",
   "dist",
@@ -176,6 +178,17 @@ function compareCandidates(a: SearchCandidate, b: SearchCandidate): number {
   return a.path.localeCompare(b.path);
 }
 
+function sortDirectoryEntries(a: Dirent, b: Dirent): number {
+  if (a.isDirectory() && !b.isDirectory()) {
+    return -1;
+  }
+  if (!a.isDirectory() && b.isDirectory()) {
+    return 1;
+  }
+
+  return a.name.localeCompare(b.name);
+}
+
 export function createSearchFilesTool(options: SearchFilesToolOptions): ToolDefinition {
   return {
     name: "search_files",
@@ -240,6 +253,12 @@ export function createSearchFilesTool(options: SearchFilesToolOptions): ToolDefi
         const dirEntries = await fs.readdir(currentDir, {
           withFileTypes: true
         });
+        /**
+         * 扫描顺序固定化，避免在不同操作系统/文件系统下出现候选抖动。
+         *
+         * 这会直接提升 search_files 在回归测试和真实问答里的稳定性。
+         */
+        dirEntries.sort(sortDirectoryEntries);
 
         for (const entry of dirEntries) {
           if (shouldSkipEntry(entry.name, args.includeHidden, entry.isDirectory())) {
@@ -279,7 +298,8 @@ export function createSearchFilesTool(options: SearchFilesToolOptions): ToolDefi
       await walk(targetDir, 1);
 
       candidates.sort(compareCandidates);
-      const truncated = scanTruncated || candidates.length > args.limit;
+      const resultsTruncated = candidates.length > args.limit;
+      const truncated = scanTruncated || resultsTruncated;
       const results = candidates.slice(0, args.limit);
 
       return JSON.stringify(
@@ -290,6 +310,9 @@ export function createSearchFilesTool(options: SearchFilesToolOptions): ToolDefi
           maxDepth: args.maxDepth,
           limit: args.limit,
           scannedFiles,
+          scannedFilesLimit: MAX_SCANNED_FILES,
+          scanTruncated,
+          resultsTruncated,
           truncated,
           resultCount: results.length,
           results

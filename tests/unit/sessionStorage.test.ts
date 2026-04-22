@@ -72,6 +72,25 @@ test("sessionStorage: 会对损坏会话文件给出可读错误", async () => {
   }
 });
 
+test("sessionStorage: latest 路径是目录时会抛出可读错误", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "code-agent-session-"));
+  try {
+    const filePath = getLatestSessionFilePath(tempRoot);
+    await fs.mkdir(filePath, { recursive: true });
+
+    await assert.rejects(
+      () => loadLatestSession(tempRoot),
+      (error) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /会话文件路径不是普通文件/);
+        return true;
+      }
+    );
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("sessionStorage: clearLatestSession 会清理文件", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "code-agent-session-"));
   const cache = new SessionStorageCache();

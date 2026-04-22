@@ -1,10 +1,26 @@
 import type { AssistantToolCall, Message } from "../core/message.js";
 import type { PersistedSessionV1 } from "./types.js";
 
+/**
+ * 统一对象守卫：只接受“普通对象”，拒绝 null/数组。
+ *
+ * 设计原因：
+ * - 会话恢复属于高风险入口，必须先做基础结构收敛；
+ * - 先把 unknown 压成 Record，后续字段校验才有意义；
+ * - 这个守卫被多个解析函数复用，避免每层重复写同类判断。
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+/**
+ * 解析 assistant.toolCalls 项。
+ *
+ * 这里坚持“逐字段失败即抛错”的策略：
+ * - 会话文件是本地可信度有限输入，不应静默吞掉坏数据；
+ * - 一旦结构损坏，尽早在恢复阶段失败，比带着脏状态运行更安全；
+ * - 上层 storage 会把这里的错误包装成用户可操作提示。
+ */
 function parseAssistantToolCall(raw: unknown, index: number): AssistantToolCall {
   if (!isRecord(raw)) {
     throw new Error(`messages[${index}].toolCalls 项必须是对象。`);
@@ -42,6 +58,14 @@ function parseAssistantToolCall(raw: unknown, index: number): AssistantToolCall 
   };
 }
 
+/**
+ * 解析单条消息。
+ *
+ * 解析原则：
+ * - role 决定分支结构，不做“猜测式修复”；
+ * - 对可选字段（assistant.toolCalls）保持协议语义；
+ * - 不支持的 role 直接报错，避免脏数据悄悄混入会话历史。
+ */
 function parseMessage(raw: unknown, index: number): Message {
   if (!isRecord(raw)) {
     throw new Error(`messages[${index}] 必须是对象。`);
@@ -159,6 +183,13 @@ export function parsePersistedSessionV1(content: string): PersistedSessionV1 {
     throw new Error("messages 必须是数组。");
   }
 
+  /**
+   * 逐条解析并保留索引位置信息，方便定位损坏消息。
+   *
+   * 示例：
+   * - `messages[3].toolCallId 非法`
+   * - 用户可据此快速定位并修复/删除坏记录。
+   */
   const messages = rawMessages.map((message, index) => parseMessage(message, index));
   return {
     version: 1,

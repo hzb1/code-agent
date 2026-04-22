@@ -266,8 +266,12 @@ async function collectCwdCheck(projectRoot: string, checks: DoctorCheck[]): Prom
 
 function printCommonNetworkTips(): void {
   console.error("[ca][doctor] 常见网络问题建议：");
+  console.error("[ca][doctor] - 401：通常是 API Key 错误或过期，优先检查 LLM_API_KEY。");
+  console.error("[ca][doctor] - 403：通常是模型权限/额度不足（含免费额度耗尽），去 provider 控制台确认权限与配额。");
   console.error("[ca][doctor] - 404/空响应：优先检查 LLM_BASE_URL 与 LLM_MODEL 是否匹配当前 provider。");
   console.error("[ca][doctor] - 429 限流：降低并发、延长重试间隔，必要时切更高配额 key。");
+  console.error("[ca][doctor] - DNS/连接失败：检查网络、代理和企业网策略，确认目标域名可访问。");
+  console.error("[ca][doctor] - 非 JSON 响应：多见于网关返回 HTML 错页，优先检查 base URL 是否写成控制台页面地址。");
   console.error("[ca][doctor] - 超时：先检查网络质量，再适当增大 LLM_TIMEOUT_MS（默认 120000ms）。");
 }
 

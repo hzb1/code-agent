@@ -48,6 +48,7 @@ const MAX_ALLOWED_LIMIT = 1_000;
  * - 在“代码理解”场景里优先级低，默认跳过可显著提高结果质量。
  */
 const NOISY_DIRECTORY_NAMES = new Set([
+  ".code-agent",
   ".git",
   "node_modules",
   "dist",

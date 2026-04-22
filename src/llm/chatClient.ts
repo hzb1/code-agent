@@ -231,6 +231,87 @@ function parseJsonResponse(bodyText: string): {
 }
 
 /**
+ * 判断服务端文案是否在表达“权限/额度已耗尽”。
+ *
+ * 典型场景：
+ * - free tier exhausted
+ * - quota exceeded / insufficient credits
+ * - key 对目标模型无权限
+ */
+function isQuotaOrEntitlementIssue(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("free tier") ||
+    normalized.includes("exhaust") ||
+    normalized.includes("quota") ||
+    normalized.includes("insufficient") ||
+    normalized.includes("credit") ||
+    normalized.includes("forbidden") ||
+    normalized.includes("permission denied") ||
+    normalized.includes("额度") ||
+    normalized.includes("权限") ||
+    normalized.includes("余额")
+  );
+}
+
+/**
+ * 将 HTTP 状态码映射为可操作错误提示。
+ *
+ * 为什么要集中映射：
+ * - 让 CLI 和日志在不同 provider 下保持同一提示口径；
+ * - 覆盖用户高频问题（401/403/404/429/5xx）；
+ * - 把“下一步动作”直接放进错误文案，减少来回排障成本。
+ */
+function buildHttpStatusErrorMessage(
+  config: AppConfig,
+  status: number,
+  detail: string
+): string {
+  if (status === 401) {
+    return (
+      `[${config.provider}] 请求失败，HTTP 401：API Key 无效或已过期。` +
+      `请检查 LLM_API_KEY（或 provider 专属 key）是否正确。服务端信息：${detail}`
+    );
+  }
+
+  if (status === 403) {
+    if (isQuotaOrEntitlementIssue(detail)) {
+      return (
+        `[${config.provider}] 请求失败，HTTP 403：当前账号对该模型的权限或额度不足` +
+        `（例如免费额度已用尽）。请在 provider 控制台检查配额/权限，或更换可用模型与 key。` +
+        `服务端信息：${detail}`
+      );
+    }
+
+    return (
+      `[${config.provider}] 请求失败，HTTP 403：无权访问目标接口或模型。` +
+      `请确认 key 是否开通该模型权限，并检查 LLM_MODEL 是否可用。服务端信息：${detail}`
+    );
+  }
+
+  if (status === 404) {
+    return (
+      `[${config.provider}] 请求失败，HTTP 404：接口地址或模型不存在。` +
+      `请重点检查 LLM_BASE_URL 与 LLM_MODEL 是否和当前 provider 匹配，可先执行 ca doctor。` +
+      `服务端信息：${detail}`
+    );
+  }
+
+  if (status === 429) {
+    return `[${config.provider}] 请求失败，HTTP 429：触发限流，请降低请求频率后重试。服务端信息：${detail}`;
+  }
+
+  if (status >= 500) {
+    return (
+      `[${config.provider}] 请求失败，HTTP ${status}：服务端暂时异常。` +
+      `建议稍后重试，或切换其它可用 provider/base URL。服务端信息：${detail}`
+    );
+  }
+
+  return `[${config.provider}] 请求失败，HTTP ${status}：${detail}`;
+}
+
+/**
  * 计算 provider 的最小请求间隔（毫秒）。
  *
  * 说明：
@@ -361,14 +442,9 @@ export async function createChatCompletion(
           continue;
         }
 
-        if (response.status === 429) {
-          // 限流错误单独给出高可读文案，便于用户快速调整频率。
-          throw new ProviderError(
-            `[${config.provider}] 触发 429 限流，请降低请求频率后重试。服务端信息：${errorMessage}`
-          );
-        }
-
-        throw new ProviderError(`[${config.provider}] 请求失败，HTTP ${response.status}：${errorMessage}`);
+        throw new ProviderError(
+          buildHttpStatusErrorMessage(config, response.status, errorMessage)
+        );
       }
 
       if (!data) {
@@ -406,11 +482,21 @@ export async function createChatCompletion(
             ? (cause as { code: string }).code
             : "";
 
-        if (code === "ENOTFOUND") {
+        if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
           // 常见于 DNS 解析失败，直接提示网络/DNS/代理排查方向。
           lastError = new ProviderError(
-            `[${config.provider}] 访问 ${endpoint} 时发生 DNS 错误（ENOTFOUND）。` +
+            `[${config.provider}] 访问 ${endpoint} 时发生 DNS 错误（${code}）。` +
               `请检查网络/DNS/代理配置，或切换 provider/base URL。`
+          );
+        } else if (code === "ECONNREFUSED") {
+          lastError = new ProviderError(
+            `[${config.provider}] 无法连接 ${endpoint}（ECONNREFUSED）。` +
+              `请检查 LLM_BASE_URL 是否可达，或确认本地代理/网关是否已启动。`
+          );
+        } else if (code === "ETIMEDOUT") {
+          lastError = new ProviderError(
+            `[${config.provider}] 连接 ${endpoint} 超时（ETIMEDOUT）。` +
+              `请检查网络质量，或适当增大 LLM_TIMEOUT_MS。`
           );
         } else {
           lastError = new ProviderError(

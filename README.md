@@ -93,6 +93,22 @@ LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
 MAX_AGENT_LOOPS=20 ca "分析这个项目"
 ```
 
+### 常见错误排查
+出现请求失败时，先跑一遍：
+
+```bash
+ca doctor
+```
+
+高频错误可先按下面排查：
+- `HTTP 401`：通常是 API Key 错误或过期，优先检查 `LLM_API_KEY`（或 provider 专属 key）。
+- `HTTP 403`：通常是模型权限/额度不足（包括 free tier 用尽），去 provider 控制台确认配额和模型权限。
+- `HTTP 404` 或空响应：优先检查 `LLM_BASE_URL` 与 `LLM_MODEL` 是否匹配当前 provider。
+- `HTTP 429`：请求太频繁，降低并发或延长重试间隔。
+- `DNS/连接失败`：检查网络、代理、公司内网策略以及目标域名连通性。
+- `响应不是有效 JSON`：常见于网关返回 HTML 错页，重点检查是否把控制台页面地址误填为 `LLM_BASE_URL`。
+- `请求超时`：先检查网络质量，再考虑增大 `LLM_TIMEOUT_MS`。
+
 ### 工程命令
 用于代码检查与格式化：
 

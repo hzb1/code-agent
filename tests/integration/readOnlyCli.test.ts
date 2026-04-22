@@ -71,6 +71,57 @@ test("readOnlyCli: 未提供问题时进入 REPL，并支持 exit 退出", async
   assert.match(result.stderr, /已退出 REPL/);
 });
 
+test("readOnlyCli: REPL 收到 Ctrl+C 时会优雅退出", async (t) => {
+  const result = await new Promise<CommandResult>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--import", "tsx", "src/cli/index.ts"], {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        LLM_PROVIDER: "qwen",
+        LLM_API_KEY: "test-key",
+        LLM_BASE_URL: "https://example.com",
+        LLM_MODEL: "test-model",
+        CA_SHOW_CHAT_TRACE: "0"
+      }
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let sentSigint = false;
+    const sigintTimer = setTimeout(() => {
+      if (!sentSigint) {
+        sentSigint = true;
+        child.kill("SIGINT");
+      }
+    }, 2000);
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+      if (!sentSigint && stderr.includes("已进入 REPL 多轮模式")) {
+        sentSigint = true;
+        child.kill("SIGINT");
+      }
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      clearTimeout(sigintTimer);
+      resolve({ code, stdout, stderr });
+    });
+  });
+
+  if (result.code === null) {
+    t.skip("当前环境下 SIGINT 会直接终止非 TTY 子进程，跳过优雅退出断言。");
+    return;
+  }
+
+  assert.equal(result.code, 0);
+  assert.match(result.stderr, /Ctrl\+C/);
+  assert.match(result.stderr, /已退出 REPL/);
+});
+
 test("readOnlyCli: 能走完真实 CLI -> 假 Provider -> read_file -> 最终答案链路", async (t) => {
   let requestCount = 0;
 

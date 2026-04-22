@@ -56,6 +56,7 @@ test("doctor: 配置完整时返回通过", async () => {
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /\[ca\]\[doctor\] \[通过\] LLM_PROVIDER/);
   assert.match(result.stderr, /诊断结果：通过/);
+  assert.match(result.stderr, /403：通常是模型权限\/额度不足/);
 });
 
 test("doctor: 配置错误时返回非 0 并给出可操作提示", async () => {

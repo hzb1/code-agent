@@ -58,7 +58,7 @@ type ReadFileToolResultPayload = {
   path: string;
   resolvedPath: string;
   truncated: boolean;
-  contentLength: number;
+  returnedCharCount: number;
 };
 
 /**
@@ -143,17 +143,33 @@ function parseReadFileToolResultPayload(content: string): ReadFileToolResultPayl
     const filePath = candidate.path;
     const resolvedPath = candidate.resolvedPath;
     const truncated = candidate.truncated;
+    const returnedCharCount = candidate.returnedCharCount;
     const fileContent = candidate.content;
 
     if (typeof filePath !== "string" || typeof resolvedPath !== "string") {
       return undefined;
     }
 
+    /**
+     * `read_file` v0.2.1 起会显式返回 returnedCharCount。
+     *
+     * 兼容策略：
+     * - 新字段存在时优先使用，避免依赖 content 字符串本身；
+     * - 老版本无该字段时，回退到 `content.length`；
+     * - 两者都不可用时按 0 处理，不让缓存索引影响主流程。
+     */
+    const normalizedReturnedCharCount =
+      typeof returnedCharCount === "number" && Number.isFinite(returnedCharCount) && returnedCharCount >= 0
+        ? Math.floor(returnedCharCount)
+        : typeof fileContent === "string"
+          ? fileContent.length
+          : 0;
+
     return {
       path: filePath,
       resolvedPath,
       truncated: typeof truncated === "boolean" ? truncated : false,
-      contentLength: typeof fileContent === "string" ? fileContent.length : 0
+      returnedCharCount: normalizedReturnedCharCount
     };
   } catch {
     return undefined;
@@ -327,7 +343,7 @@ export class QueryEngine {
         truncated: payload.truncated,
         readCount: (existing?.readCount ?? 0) + 1,
         lastReadAt: now,
-        lastContentChars: payload.contentLength
+        lastContentChars: payload.returnedCharCount
       });
     }
   }

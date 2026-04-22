@@ -24,12 +24,14 @@ test("list_files: 列出目录结构并忽略噪音目录", async () => {
     await writeFile(path.join(rootDir, "src/app/queryEngine.ts"), "export {};");
     await writeFile(path.join(rootDir, "node_modules/pkg/index.js"), "module.exports = {};");
     await writeFile(path.join(rootDir, ".git/config"), "[core]");
+    await writeFile(path.join(rootDir, ".code-agent/session/latest.json"), "{}");
 
     const tool = createListFilesTool({ rootDir });
     const output = await tool.execute({
       path: ".",
       maxDepth: 3,
-      limit: 200
+      limit: 200,
+      includeHidden: true
     });
     const parsed = JSON.parse(output) as {
       entries: Array<{ path: string }>;
@@ -43,6 +45,7 @@ test("list_files: 列出目录结构并忽略噪音目录", async () => {
     assert.ok(listedPaths.includes("src/app"));
     assert.equal(listedPaths.some((item) => item.startsWith("node_modules")), false);
     assert.equal(listedPaths.some((item) => item.startsWith(".git")), false);
+    assert.equal(listedPaths.some((item) => item.startsWith(".code-agent")), false);
   } finally {
     await fs.rm(rootDir, {
       recursive: true,

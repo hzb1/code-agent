@@ -34,9 +34,15 @@ test("search_files: 按路径关键词返回候选文件并按分数排序", asy
       results: Array<{ path: string; score: number }>;
       resultCount: number;
       truncated: boolean;
+      scanTruncated: boolean;
+      resultsTruncated: boolean;
+      scannedFilesLimit: number;
     };
 
     assert.equal(parsed.truncated, false);
+    assert.equal(parsed.scanTruncated, false);
+    assert.equal(parsed.resultsTruncated, false);
+    assert.equal(typeof parsed.scannedFilesLimit, "number");
     assert.ok(parsed.resultCount >= 2);
     assert.ok(parsed.results.some((item) => item.path === "src/app/queryEngine.ts"));
     assert.ok(parsed.results.some((item) => item.path === "src/loop/queryLoop.ts"));
@@ -54,6 +60,7 @@ test("search_files: 忽略 node_modules，且越界路径会被拒绝", async ()
 
   try {
     await writeFile(path.join(rootDir, "node_modules/query/index.js"), "module.exports = {};");
+    await writeFile(path.join(rootDir, ".code-agent/query/session.json"), "{}");
     await writeFile(path.join(rootDir, "src/queryable.ts"), "export {};");
 
     const tool = createSearchFilesTool({ rootDir });
@@ -61,13 +68,15 @@ test("search_files: 忽略 node_modules，且越界路径会被拒绝", async ()
     const output = await tool.execute({
       query: "query",
       path: ".",
-      limit: 20
+      limit: 20,
+      includeHidden: true
     });
     const parsed = JSON.parse(output) as {
       results: Array<{ path: string }>;
     };
 
     assert.equal(parsed.results.some((item) => item.path.startsWith("node_modules/")), false);
+    assert.equal(parsed.results.some((item) => item.path.startsWith(".code-agent/")), false);
     assert.ok(parsed.results.some((item) => item.path === "src/queryable.ts"));
 
     await assert.rejects(

@@ -19,6 +19,8 @@ type ReadFileArgs = {
   path: string;
 };
 
+type ReadFileStage = "stat" | "read";
+
 /**
  * 校验并规范化工具入参。
  *
@@ -58,6 +60,40 @@ function resolvePathInsideRoot(rootDir: string, requestedPath: string): string {
   return absoluteFile;
 }
 
+/**
+ * 将底层文件系统错误翻译为更可操作的中文提示。
+ *
+ * 为什么要做这层翻译：
+ * - Node 原始 errno 对终端用户不友好（例如 ENOENT、EACCES）；
+ * - 工具是给模型和用户同时消费的，提示必须直接告诉“下一步怎么做”；
+ * - 统一错误文案也便于后续测试断言和回归排查。
+ */
+function toReadableFileErrorMessage(
+  stage: ReadFileStage,
+  requestedPath: string,
+  absoluteFile: string,
+  error: unknown
+): string {
+  const errno = error as NodeJS.ErrnoException;
+  const code = errno.code;
+  const action = stage === "stat" ? "检查文件状态" : "读取文件内容";
+
+  if (code === "ENOENT") {
+    return `读取失败：文件不存在（${requestedPath}）。请先用 search_files 或 list_files 确认路径。`;
+  }
+
+  if (code === "EACCES" || code === "EPERM") {
+    return `读取失败：没有权限访问文件（${requestedPath}）。请检查文件权限或改用可访问路径。`;
+  }
+
+  if (code === "EISDIR") {
+    return `读取失败：目标是目录而不是文件（${requestedPath}）。请改用 read_file 读取具体文件。`;
+  }
+
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  return `读取失败：${action}时发生错误（${requestedPath} -> ${absoluteFile}）。${rawMessage}`;
+}
+
 export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition {
   return {
     name: "read_file",
@@ -94,13 +130,23 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
        */
       const args = parseArgs(rawArgs);
       const absoluteFile = resolvePathInsideRoot(options.rootDir, args.path);
-      const fileStats = await fs.stat(absoluteFile);
+      let fileStats: Awaited<ReturnType<typeof fs.stat>>;
+      try {
+        fileStats = await fs.stat(absoluteFile);
+      } catch (error) {
+        throw new Error(toReadableFileErrorMessage("stat", args.path, absoluteFile, error));
+      }
 
       if (!fileStats.isFile()) {
         throw new Error(`'${args.path}' 不是常规文件。`);
       }
 
-      const content = await fs.readFile(absoluteFile, "utf8");
+      let content: string;
+      try {
+        content = await fs.readFile(absoluteFile, "utf8");
+      } catch (error) {
+        throw new Error(toReadableFileErrorMessage("read", args.path, absoluteFile, error));
+      }
       /**
        * 超长文件按上限截断，并显式返回 `truncated` 标记。
        *
@@ -110,6 +156,8 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
        */
       const truncated = content.length > options.maxChars;
       const safeContent = truncated ? content.slice(0, options.maxChars) : content;
+      const originalCharCount = content.length;
+      const returnedCharCount = safeContent.length;
 
       // 输出统一结构，便于模型在不同场景下稳定解析。
       return JSON.stringify(
@@ -117,6 +165,11 @@ export function createReadFileTool(options: ReadFileToolOptions): ToolDefinition
           path: args.path,
           resolvedPath: absoluteFile,
           truncated,
+          originalCharCount,
+          returnedCharCount,
+          truncationHint: truncated
+            ? `文件内容过长，已截断到前 ${options.maxChars} 个字符。可缩小读取范围或分段读取。`
+            : undefined,
           content: safeContent
         },
         null,
