@@ -1,3 +1,5 @@
+import type { PermissionContext, PermissionDecision } from "#src/permissions/types.js";
+
 /**
  * Tool Protocol（工具协议层）。
  *
@@ -27,6 +29,18 @@ export type ToolInputSchema = {
 export type ToolExecutionArgs = Record<string, unknown>;
 
 /**
+ * 工具权限检查入参。
+ *
+ * 说明：
+ * - `args`：工具调用参数；
+ * - `context`：会话级权限上下文（模式、项目边界、计划批准状态）。
+ */
+export type ToolPermissionCheckArgs = {
+  args: ToolExecutionArgs;
+  context: PermissionContext;
+};
+
+/**
  * 统一工具定义协议。
  *
  * 元信息字段解释：
@@ -44,5 +58,6 @@ export type ToolDefinition = {
   isReadOnly: boolean;
   isDestructive: boolean;
   isConcurrencySafe: boolean;
+  checkPermissions?: (args: ToolPermissionCheckArgs) => Promise<PermissionDecision> | PermissionDecision;
   execute: (args: ToolExecutionArgs) => Promise<string>;
 };

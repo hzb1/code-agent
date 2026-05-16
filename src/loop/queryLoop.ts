@@ -3,6 +3,7 @@ import type { AssistantMessage, Message, ToolMessage } from "#src/core/message.j
 import { createChatCompletion } from "#src/llm/chatClient.js";
 import type { LlmFunctionCall, LlmMessage } from "#src/llm/types.js";
 import type { QueryDebugEvent, QueryLoopParams, QueryLoopResult } from "#src/loop/types.js";
+import { checkToolPermission } from "#src/permissions/check.js";
 import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
@@ -265,6 +266,37 @@ function extractQueryFromToolArguments(raw: string): string | undefined {
   }
 }
 
+function extractCommandFromToolArguments(raw: string): string | undefined {
+  if (!raw.trim()) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const command = (parsed as Record<string, unknown>).command;
+    if (typeof command !== "string" || !command.trim()) {
+      return undefined;
+    }
+    const args = (parsed as Record<string, unknown>).args;
+    if (!Array.isArray(args)) {
+      return command.trim();
+    }
+
+    const normalizedArgs = args.filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+    if (normalizedArgs.length === 0) {
+      return command.trim();
+    }
+
+    return `${command.trim()} ${normalizedArgs.join(" ")}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 生成“用户可读”的工具调用短句。
  *
@@ -284,6 +316,14 @@ function formatConversationToolCall(call: LlmFunctionCall): string {
   if (call.function.name === "read_file") {
     const path = extractPathFromToolArguments(call.function.arguments);
     return path ? `[对话] 模型：Read ${path}` : "[对话] 模型：Read";
+  }
+  if (call.function.name === "write_file") {
+    const path = extractPathFromToolArguments(call.function.arguments);
+    return path ? `[对话] 模型：Write ${path}` : "[对话] 模型：Write";
+  }
+  if (call.function.name === "exec_command") {
+    const command = extractCommandFromToolArguments(call.function.arguments);
+    return command ? `[对话] 模型：Run ${command}` : "[对话] 模型：Run command";
   }
 
   return `[对话] ${call.function.name}(${toConversationTextPreview(call.function.arguments)})`;
@@ -317,7 +357,11 @@ function parseToolArgs(raw: string): Record<string, unknown> {
  * - 工具失败不直接中断主循环，而是作为工具结果回填；
  * - 这样模型可以基于失败信息做下一轮修正，提升流程韧性。
  */
-async function executeToolCall(call: LlmFunctionCall, registry: Map<string, ToolDefinition>): Promise<ToolMessage> {
+async function executeToolCall(
+  call: LlmFunctionCall,
+  registry: Map<string, ToolDefinition>,
+  params: QueryLoopParams
+): Promise<ToolMessage> {
   const tool = registry.get(call.function.name);
   if (!tool) {
     return {
@@ -329,6 +373,40 @@ async function executeToolCall(call: LlmFunctionCall, registry: Map<string, Tool
 
   try {
     const args = parseToolArgs(call.function.arguments);
+    const permissionDecision = await checkToolPermission({
+      tool,
+      args,
+      context: params.permissionContext
+    });
+
+    if (permissionDecision.behavior === "deny") {
+      return {
+        role: "tool",
+        toolCallId: call.id,
+        content: `权限拒绝：${permissionDecision.reason}`
+      };
+    }
+
+    if (permissionDecision.behavior === "ask") {
+      let confirmed = false;
+      if (params.confirmPermission) {
+        confirmed = await params.confirmPermission({
+          toolName: tool.name,
+          reason: permissionDecision.reason,
+          previewTitle: permissionDecision.previewTitle,
+          previewLines: permissionDecision.previewLines
+        });
+      }
+
+      if (!confirmed) {
+        return {
+          role: "tool",
+          toolCallId: call.id,
+          content: `权限拒绝：用户未批准执行 ${tool.name}。原因：${permissionDecision.reason}`
+        };
+      }
+    }
+
     const output = await tool.execute(args);
     return {
       role: "tool",
@@ -501,7 +579,7 @@ export async function queryLoop(params: QueryLoopParams): Promise<QueryLoopResul
       if (showConversation) {
         console.error(formatConversationToolCall(call));
       }
-      const toolMessage = await executeToolCall(call, toolRegistry);
+      const toolMessage = await executeToolCall(call, toolRegistry, params);
       workingMessages.push(toolMessage);
     }
 

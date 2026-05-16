@@ -8,6 +8,7 @@ import type { QuerySessionState } from "#src/session/types.js";
 export function printUsage(): void {
   console.error("用法：");
   console.error('  ca "<问题>"      单次提问');
+  console.error('  ca --plan "<需求>"  进入单次计划模式');
   console.error("  ca               进入 REPL 多轮对话");
   console.error("  ca doctor        运行基础诊断");
   console.error("  ca --help        查看帮助");
@@ -34,6 +35,8 @@ export function printReplHelp(): void {
   console.error("  /help      查看帮助");
   console.error("  /session   查看当前会话摘要");
   console.error("  /last      重新打印最近一次回答");
+  console.error("  /plan      进入计划模式并生成计划（例如 /plan 重构查询链路）");
+  console.error("  /approve   批准最近计划并进入可执行阶段");
   console.error("  clear      清空当前会话与屏幕");
   console.error("  exit|quit  退出 REPL");
 }
@@ -74,6 +77,9 @@ export function printSessionSummary(state: QuerySessionState): void {
   console.error(`[ca] sessionId: ${state.sessionId}`);
   console.error(`[ca] cwd: ${state.cwd}`);
   console.error(`[ca] model: ${state.model}`);
+  console.error(`[ca] mode: ${state.runMode}`);
+  console.error(`[ca] planApproved: ${state.isPlanApproved ? "yes" : "no"}`);
+  console.error(`[ca] hasLatestPlan: ${state.hasLatestPlan ? "yes" : "no"}`);
   console.error(`[ca] turns: ${state.turnCount}`);
   console.error(`[ca] messages: ${state.messageCount}`);
   console.error(`[ca] readFiles: ${state.readOnlyCache.readFiles.length}`);

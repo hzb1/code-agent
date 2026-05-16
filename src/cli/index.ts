@@ -3,6 +3,7 @@
 import "dotenv/config";
 import { setDefaultResultOrder } from "node:dns";
 import { QueryEngine } from "#src/app/queryEngine.js";
+import { createStdPermissionConfirm } from "#src/cli/confirm.js";
 import { runDoctor } from "#src/cli/doctor.js";
 import { printAnswer, printError, printSystem, printUsage } from "#src/cli/output.js";
 import { startRepl } from "#src/cli/repl.js";
@@ -33,6 +34,10 @@ type CliMode =
       prompt: string;
     }
   | {
+      mode: "plan";
+      prompt: string;
+    }
+  | {
       mode: "repl";
     }
   | {
@@ -52,6 +57,16 @@ function resolveCliMode(args: string[]): CliMode {
   const firstArg = args[0]?.trim();
   if (firstArg === "--help" || firstArg === "-h") {
     return { mode: "help" };
+  }
+  if (firstArg === "--plan") {
+    const prompt = args.slice(1).join(" ").trim();
+    if (!prompt) {
+      return { mode: "help" };
+    }
+    return {
+      mode: "plan",
+      prompt
+    };
   }
   if (firstArg === "doctor") {
     return { mode: "doctor" };
@@ -105,7 +120,22 @@ async function main(): Promise<void> {
         config,
         toolRegistry
       });
-      const answer = await engine.run(cliMode.prompt);
+      const answer = await engine.run(cliMode.prompt, {
+        confirmPermission: createStdPermissionConfirm()
+      });
+      printAnswer(answer);
+      return;
+    }
+
+    if (cliMode.mode === "plan") {
+      const engine = new QueryEngine({
+        config,
+        toolRegistry,
+        initialRunMode: "plan"
+      });
+      const answer = await engine.run(cliMode.prompt, {
+        confirmPermission: createStdPermissionConfirm()
+      });
       printAnswer(answer);
       return;
     }

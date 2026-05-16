@@ -3,7 +3,10 @@
 ## 项目简介
 `Code Agent` 是一个本地 CLI Coding Agent（命令行代码助手）项目。
 
-当前以代码理解、项目检索和多轮问答为主。
+当前已支持“先规划再执行”的受控改动流程：
+- 只读检索与多轮问答；
+- Plan Mode（计划模式）；
+- 写文件与命令执行（带权限确认）。
 
 ## 使用说明
 ### 1. 克隆项目
@@ -44,6 +47,7 @@ npm run build
 ### 5. 启动运行
 ```bash
 npm run start -- "解释 package.json"
+npm run start -- --plan "重构 queryLoop"
 ```
 
 如果你希望直接使用 `ca` 命令，可以在构建后执行：
@@ -67,6 +71,7 @@ npm run test
 ```bash
 npm run start -- "解释 package.json"
 ca "解释 package.json"
+ca --plan "重构 queryLoop"
 ca
 ca doctor
 ```
@@ -74,6 +79,7 @@ ca doctor
 说明：
 - `npm run start -- "..."` 不依赖全局命令，最稳；
 - `ca` 需要先执行一次 `npm link`。
+- `ca --plan "..."` 会进入单次计划模式，只做分析和规划，不会执行改动。
 
 ### 开发命令
 用于本地开发时直接运行 TypeScript 源码：
@@ -92,6 +98,19 @@ CA_SHOW_CHAT_TRACE=0 ca "解释这个项目"
 LLM_DEBUG_HTTP=1 npm run start -- "解释 package.json"
 MAX_AGENT_LOOPS=20 ca "分析这个项目"
 ```
+
+### 受控执行命令
+用于触发改动能力（写文件/执行命令）：
+
+```bash
+ca --plan "把 queryLoop 拆成更清晰的小函数"
+ca
+# 进入 REPL 后可用 /plan 与 /approve
+```
+
+说明：
+- 改动类工具（`write_file`、`exec_command`）会先显示预览，再询问是否批准；
+- `exec_command` 仅允许白名单验证命令（如 `npm run build`、`npm run typecheck`、`npm run test`）。
 
 ### 常见错误排查
 出现请求失败时，先跑一遍：
@@ -125,6 +144,8 @@ npm run test:integration
 /help
 /session
 /last
+/plan <需求>
+/approve
 clear
 exit
 quit
@@ -142,6 +163,7 @@ src/
 ├─ cli/        # 命令入口、REPL、输出、doctor
 ├─ app/        # QueryEngine（会话编排器）
 ├─ loop/       # QueryLoop（单轮智能体循环）
+├─ permissions/# Permission Model（allow/ask/deny）
 ├─ tools/      # 工具系统与工具注册
 ├─ llm/        # 模型请求与 Provider（模型提供方）接入
 ├─ session/    # Session Storage（会话保存与恢复）
@@ -152,7 +174,10 @@ src/
 - `src/cli/index.ts`：CLI 主入口，负责区分单次问答、REPL（持续聊天模式）和 `doctor`
 - `src/app/queryEngine.ts`：`QueryEngine（会话编排器）`，负责组织一个会话
 - `src/loop/queryLoop.ts`：`QueryLoop（单轮智能体循环）`，负责“模型 -> 工具 -> 继续/结束”
-- `src/tools/registry.ts`：工具注册入口，当前接入只读工具三件套
+- `src/tools/registry.ts`：工具注册入口，统一管理检索工具与受控执行工具
+- `src/tools/writeFile.ts`：`write_file`，项目内安全写文件（含差异预览）
+- `src/tools/execCommand.ts`：`exec_command`，白名单命令执行（含超时与结果摘要）
+- `src/permissions/check.ts`：统一权限裁决（allow / ask / deny）
 - `src/llm/chatClient.ts`：模型请求、Provider（模型提供方）接入和 HTTP 调试输出
 - `src/session/storage.ts`：最近会话的保存与恢复
 

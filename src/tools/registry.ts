@@ -1,7 +1,9 @@
+import { createExecCommandTool } from "#src/tools/execCommand.js";
 import { createListFilesTool } from "#src/tools/listFiles.js";
 import { createReadFileTool } from "#src/tools/readFile.js";
 import { createSearchFilesTool } from "#src/tools/searchFiles.js";
 import type { ToolDefinition } from "#src/tools/types.js";
+import { createWriteFileTool } from "#src/tools/writeFile.js";
 
 /**
  * 工具注册中心：
@@ -38,11 +40,19 @@ export function createToolRegistry(options: RegistryOptions): Map<string, ToolDe
     rootDir: options.rootDir,
     maxChars: options.maxFileChars
   });
+  const writeFileTool = createWriteFileTool({
+    rootDir: options.rootDir
+  });
+  const execCommandTool = createExecCommandTool({
+    rootDir: options.rootDir
+  });
 
   return new Map([
     [listFilesTool.name, listFilesTool],
     [searchFilesTool.name, searchFilesTool],
-    [readFileTool.name, readFileTool]
+    [readFileTool.name, readFileTool],
+    [writeFileTool.name, writeFileTool],
+    [execCommandTool.name, execCommandTool]
   ]);
 }
 

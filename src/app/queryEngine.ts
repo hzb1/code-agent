@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { getRunModeSystemPrompt } from "#src/app/plan.js";
+import type { AgentRunMode, PlanSnapshot } from "#src/app/planTypes.js";
 import type { AppConfig } from "#src/core/config.js";
 import { ConfigError } from "#src/core/errors.js";
 import type { AssistantToolCall, Message } from "#src/core/message.js";
 import type { LlmFunctionTool } from "#src/llm/types.js";
 import { queryLoop } from "#src/loop/queryLoop.js";
 import type { QueryDebugEvent, QueryDebugEventHandler, QueryLoopResult, QueryLoopRunner } from "#src/loop/types.js";
+import { createPermissionContext } from "#src/permissions/context.js";
+import type { PermissionConfirm } from "#src/permissions/types.js";
 import type { PersistedSessionV1, QuerySessionState, SessionReadFileCacheEntry } from "#src/session/types.js";
 import { listTools } from "#src/tools/registry.js";
 import type { ToolDefinition } from "#src/tools/types.js";
@@ -30,8 +34,10 @@ import type { ToolDefinition } from "#src/tools/types.js";
  * - 继续强调 read-only 阶段的行为边界。
  */
 const DEFAULT_SYSTEM_PROMPT = [
-  "你是一个 CLI 编码助手，负责帮助用户理解当前项目。",
+  "你是一个 CLI 编码助手，负责帮助用户理解并改进当前项目。",
   "当路径不明确时，先使用 list_files 或 search_files，再使用 read_file。",
+  "在需要修改代码时，可使用 write_file；在需要验证时，可使用 exec_command。",
+  "涉及写入或命令执行时，系统会要求用户确认。",
   "请以工具返回结果作为事实依据。",
   "最终回答请简洁、务实、可执行。"
 ].join(" ");
@@ -43,8 +49,14 @@ export type QueryEngineOptions = {
   systemPrompt?: string;
   debug?: boolean;
   showConversation?: boolean;
+  confirmPermission?: PermissionConfirm;
+  initialRunMode?: AgentRunMode;
   onDebugEvent?: QueryDebugEventHandler;
   queryLoopRunner?: QueryLoopRunner;
+};
+
+export type RunOnceOptions = {
+  confirmPermission?: PermissionConfirm;
 };
 
 /**
@@ -204,6 +216,7 @@ export class QueryEngine {
   private readonly systemPrompt: string;
   private readonly debug: boolean;
   private readonly showConversation: boolean;
+  private readonly defaultConfirmPermission?: PermissionConfirm;
   private readonly onDebugEvent?: QueryDebugEventHandler;
   private readonly queryLoopRunner: QueryLoopRunner;
 
@@ -226,6 +239,8 @@ export class QueryEngine {
   private turnCount: number;
   private mutableMessages: Message[];
   private readonly readOnlyFileCache: Map<string, SessionReadFileCacheEntry>;
+  private runMode: AgentRunMode;
+  private latestPlan?: PlanSnapshot;
 
   constructor(options: QueryEngineOptions) {
     this.config = options.config;
@@ -240,6 +255,7 @@ export class QueryEngine {
      * - 或在构造 QueryEngine 时显式传 `showConversation: false`。
      */
     this.showConversation = options.showConversation ?? process.env.CA_SHOW_CHAT_TRACE !== "0";
+    this.defaultConfirmPermission = options.confirmPermission;
     this.onDebugEvent = options.onDebugEvent;
     this.queryLoopRunner = options.queryLoopRunner ?? queryLoop;
     const restoredSession = options.restoredSession;
@@ -252,6 +268,7 @@ export class QueryEngine {
     this.turnCount = restoredSession?.turnCount ?? 0;
     this.mutableMessages = restoredSession ? cloneMessages(restoredSession.messages) : [];
     this.readOnlyFileCache = new Map<string, SessionReadFileCacheEntry>();
+    this.runMode = options.initialRunMode ?? "normal";
 
     /**
      * 恢复会话后，立即从历史消息重建 readOnlyCache。
@@ -263,6 +280,70 @@ export class QueryEngine {
     if (this.mutableMessages.length > 0) {
       this.updateReadOnlyFileCacheFromNewMessages(0);
     }
+  }
+
+  /**
+   * 当前是否处于“计划已批准”状态。
+   */
+  private get isPlanApproved(): boolean {
+    return this.runMode === "plan-approved";
+  }
+
+  /**
+   * 基于当前运行模式，构建传给 QueryLoop 的消息快照。
+   *
+   * 设计原因：
+   * - Plan Mode 的约束提示不应污染长期会话历史；
+   * - 因此仅注入到本轮快照，不写入 `mutableMessages`。
+   */
+  private buildLoopInputMessages(): Message[] {
+    const snapshot = cloneMessages(this.mutableMessages);
+    const modePrompt = getRunModeSystemPrompt(this.runMode);
+    if (!modePrompt) {
+      return snapshot;
+    }
+
+    const insertIndex =
+      snapshot.length > 0 && snapshot[snapshot.length - 1]?.role === "user" ? snapshot.length - 1 : snapshot.length;
+    snapshot.splice(insertIndex, 0, {
+      role: "system",
+      content: modePrompt
+    });
+    return snapshot;
+  }
+
+  /**
+   * 进入 Plan Mode（计划模式）。
+   */
+  enterPlanMode(): void {
+    this.runMode = "plan";
+    this.updatedAt = Date.now();
+  }
+
+  /**
+   * 批准最近计划并进入执行阶段。
+   */
+  approveLatestPlan(): { ok: boolean; message: string } {
+    if (!this.latestPlan) {
+      return {
+        ok: false,
+        message: "当前没有可批准的计划。请先执行 /plan 生成计划。"
+      };
+    }
+
+    this.runMode = "plan-approved";
+    this.updatedAt = Date.now();
+    return {
+      ok: true,
+      message: "已批准最近计划，进入可执行阶段。"
+    };
+  }
+
+  /**
+   * 获取当前运行模式。
+   */
+  getRunMode(): AgentRunMode {
+    return this.runMode;
   }
 
   /**
@@ -355,7 +436,7 @@ export class QueryEngine {
    * - `runOnce` 是 v0.2.0 会话化后的主入口；
    * - `run` 保留为兼容别名，避免外层调用一次性全改。
    */
-  async runOnce(userInput: string): Promise<string> {
+  async runOnce(userInput: string, options: RunOnceOptions = {}): Promise<string> {
     const prompt = userInput.trim();
     if (!prompt) {
       throw new ConfigError("问题为空，请提供要询问的内容。");
@@ -384,13 +465,19 @@ export class QueryEngine {
      * - QueryLoop 在新约束下只负责“计算本轮增量”，不直接修改会话状态；
      * - 这样可以把状态应用点统一收敛在 QueryEngine，避免所有权泄漏。
      */
-    const loopInputMessages = cloneMessages(this.mutableMessages);
+    const loopInputMessages = this.buildLoopInputMessages();
     const llmTools = toLlmTools(listTools(this.toolRegistry));
     const loopResult: QueryLoopResult = await this.queryLoopRunner({
       config: this.config,
       messages: loopInputMessages,
       tools: llmTools,
       toolRegistry: this.toolRegistry,
+      permissionContext: createPermissionContext({
+        projectRoot: this.config.projectRoot,
+        runMode: this.runMode,
+        isPlanApproved: this.isPlanApproved
+      }),
+      confirmPermission: options.confirmPermission ?? this.defaultConfirmPermission,
       debug: this.debug,
       showConversation: this.showConversation,
       startedAt,
@@ -411,14 +498,29 @@ export class QueryEngine {
     this.updatedAt = Date.now();
     this.updateReadOnlyFileCacheFromNewMessages(newMessageStartIndex);
 
+    /**
+     * 计划模式下，把本轮结果记录为“最近计划”。
+     *
+     * 注意：
+     * - 这里只记录会话内快照，不写磁盘；
+     * - `/approve` 仅依赖这份会话内状态。
+     */
+    if (this.runMode === "plan" && loopResult.finalText.trim()) {
+      this.latestPlan = {
+        request: prompt,
+        content: loopResult.finalText,
+        createdAt: Date.now()
+      };
+    }
+
     return loopResult.finalText;
   }
 
   /**
    * 兼容旧调用：`run()` 等价于 `runOnce()`。
    */
-  async run(userInput: string): Promise<string> {
-    return this.runOnce(userInput);
+  async run(userInput: string, options: RunOnceOptions = {}): Promise<string> {
+    return this.runOnce(userInput, options);
   }
 
   /**
@@ -439,6 +541,8 @@ export class QueryEngine {
     this.mutableMessages = [];
     this.readOnlyFileCache.clear();
     this.turnCount = 0;
+    this.runMode = "normal";
+    this.latestPlan = undefined;
     this.updatedAt = Date.now();
   }
 
@@ -452,6 +556,9 @@ export class QueryEngine {
       sessionId: this.sessionId,
       cwd: this.cwd,
       model: this.model,
+      runMode: this.runMode,
+      isPlanApproved: this.isPlanApproved,
+      hasLatestPlan: Boolean(this.latestPlan),
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       turnCount: this.turnCount,

@@ -461,3 +461,35 @@ test("QueryEngine: exportPersistedSession 返回可持久化快照", async () =>
   assert.equal(persisted.messages[1]?.role, "user");
   assert.equal(persisted.messages[2]?.role, "assistant");
 });
+
+test("QueryEngine: Plan Mode 会记录计划并支持 approve", async () => {
+  const engine = new QueryEngine({
+    config: createBaseConfig(),
+    toolRegistry: createReadOnlyToolRegistry(),
+    queryLoopRunner: async () => ({
+      finalText: "1. 目标\n2. 事实\n3. 修改范围\n4. 风险\n5. 验证",
+      loopCount: 1,
+      appendedMessages: [
+        {
+          role: "assistant",
+          content: "1. 目标\n2. 事实\n3. 修改范围\n4. 风险\n5. 验证"
+        }
+      ]
+    })
+  });
+
+  engine.enterPlanMode();
+  assert.equal(engine.getRunMode(), "plan");
+  await engine.runOnce("重构查询链路");
+
+  const beforeApprove = engine.getSessionState();
+  assert.equal(beforeApprove.hasLatestPlan, true);
+  assert.equal(beforeApprove.isPlanApproved, false);
+
+  const approve = engine.approveLatestPlan();
+  assert.equal(approve.ok, true);
+  assert.equal(engine.getRunMode(), "plan-approved");
+
+  const afterApprove = engine.getSessionState();
+  assert.equal(afterApprove.isPlanApproved, true);
+});

@@ -13,6 +13,8 @@ type CommandResult = {
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
 const projectRoot = path.resolve(currentDir, "../..");
+const cliEntryPath = path.join(projectRoot, "src/cli/index.ts");
+const tsxLoaderPath = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
 function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
@@ -20,6 +22,7 @@ function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): 
       cwd: projectRoot,
       env: {
         ...process.env,
+        NODE_NO_WARNINGS: "1",
         ...extraEnv
       }
     });
@@ -45,12 +48,15 @@ function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): 
 }
 
 test("doctor: 配置完整时返回通过", async () => {
-  const result = await runNodeCommand(["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "doctor"], {
-    LLM_PROVIDER: "qwen",
-    LLM_API_KEY: "test-key",
-    LLM_BASE_URL: "https://example.com/v1",
-    LLM_MODEL: "test-model"
-  });
+  const result = await runNodeCommand(
+    ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath, "doctor"],
+    {
+      LLM_PROVIDER: "qwen",
+      LLM_API_KEY: "test-key",
+      LLM_BASE_URL: "https://example.com/v1",
+      LLM_MODEL: "test-model"
+    }
+  );
 
   assert.equal(result.code, 0);
   assert.equal(result.stdout, "");
@@ -60,12 +66,15 @@ test("doctor: 配置完整时返回通过", async () => {
 });
 
 test("doctor: 配置错误时返回非 0 并给出可操作提示", async () => {
-  const result = await runNodeCommand(["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "doctor"], {
-    LLM_PROVIDER: "bad-provider",
-    LLM_API_KEY: "",
-    LLM_BASE_URL: "not-a-url",
-    LLM_MODEL: ""
-  });
+  const result = await runNodeCommand(
+    ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath, "doctor"],
+    {
+      LLM_PROVIDER: "bad-provider",
+      LLM_API_KEY: "",
+      LLM_BASE_URL: "not-a-url",
+      LLM_MODEL: ""
+    }
+  );
 
   assert.equal(result.code, 1);
   assert.equal(result.stdout, "");

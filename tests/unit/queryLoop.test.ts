@@ -6,6 +6,7 @@ import type { Message } from "#src/core/message.js";
 import type { LlmChatCompletionResponse } from "#src/llm/types.js";
 import { queryLoop } from "#src/loop/queryLoop.js";
 import type { QueryDebugEvent } from "#src/loop/types.js";
+import type { PermissionContext } from "#src/permissions/types.js";
 import type { ToolDefinition } from "#src/tools/types.js";
 
 function createBaseConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -29,6 +30,15 @@ function createInitialMessages(): Message[] {
   ];
 }
 
+function createPermissionContext(overrides: Partial<PermissionContext> = {}): PermissionContext {
+  return {
+    projectRoot: "/tmp/project",
+    runMode: "normal",
+    isPlanApproved: false,
+    ...overrides
+  };
+}
+
 function createResponse(message: LlmChatCompletionResponse["choices"][number]["message"]): LlmChatCompletionResponse {
   return {
     id: "resp-1",
@@ -46,6 +56,7 @@ test("queryLoop: 无 tool_call 时直接返回最终答案，并发出完成事�
     messages,
     tools: [],
     toolRegistry: new Map<string, ToolDefinition>(),
+    permissionContext: createPermissionContext(),
     debug: false,
     startedAt: 100,
     onDebugEvent: (event) => events.push(event),
@@ -103,6 +114,7 @@ test("queryLoop: 检测到 tool_call 后继续循环并回填工具结果", asyn
     messages,
     tools: [],
     toolRegistry,
+    permissionContext: createPermissionContext(),
     debug: false,
     startedAt: Date.now(),
     onDebugEvent: (event) => events.push(event),
@@ -162,6 +174,7 @@ test("queryLoop: 超过最大循环次数时抛出 LoopTerminatedError", async (
         messages: createInitialMessages(),
         tools: [],
         toolRegistry: new Map<string, ToolDefinition>(),
+        permissionContext: createPermissionContext(),
         debug: false,
         startedAt: Date.now(),
         createChatCompletionFn: async () =>
@@ -189,4 +202,139 @@ test("queryLoop: 超过最大循环次数时抛出 LoopTerminatedError", async (
       return true;
     }
   );
+});
+
+test("queryLoop: plan 模式会拒绝非只读工具调用", async () => {
+  let executeCount = 0;
+  const toolRegistry = new Map<string, ToolDefinition>([
+    [
+      "write_file",
+      {
+        name: "write_file",
+        description: "写文件",
+        inputSchema: { type: "object" },
+        isReadOnly: false,
+        isDestructive: true,
+        isConcurrencySafe: false,
+        execute: async () => {
+          executeCount += 1;
+          return "ok";
+        }
+      }
+    ]
+  ]);
+
+  let requestCount = 0;
+  const result = await queryLoop({
+    config: createBaseConfig(),
+    messages: createInitialMessages(),
+    tools: [],
+    toolRegistry,
+    permissionContext: createPermissionContext({
+      runMode: "plan"
+    }),
+    debug: false,
+    startedAt: Date.now(),
+    createChatCompletionFn: async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return createResponse({
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: {
+                name: "write_file",
+                arguments: "{\"path\":\"README.md\",\"content\":\"x\",\"overwrite\":true}"
+              }
+            }
+          ]
+        });
+      }
+
+      return createResponse({
+        role: "assistant",
+        content: "已生成计划。"
+      });
+    }
+  });
+
+  assert.equal(executeCount, 0);
+  assert.equal(result.finalText, "已生成计划。");
+  const toolMessage = result.appendedMessages.find((message) => message.role === "tool");
+  assert.ok(toolMessage && toolMessage.role === "tool");
+  if (toolMessage && toolMessage.role === "tool") {
+    assert.match(toolMessage.content, /权限拒绝/);
+  }
+});
+
+test("queryLoop: ask 分支会调用确认回调，拒绝后不执行工具", async () => {
+  let executeCount = 0;
+  let confirmCount = 0;
+  const toolRegistry = new Map<string, ToolDefinition>([
+    [
+      "exec_command",
+      {
+        name: "exec_command",
+        description: "命令工具",
+        inputSchema: { type: "object" },
+        isReadOnly: false,
+        isDestructive: true,
+        isConcurrencySafe: false,
+        checkPermissions: () => ({
+          behavior: "ask",
+          reason: "需要确认"
+        }),
+        execute: async () => {
+          executeCount += 1;
+          return "done";
+        }
+      }
+    ]
+  ]);
+
+  let requestCount = 0;
+  const result = await queryLoop({
+    config: createBaseConfig(),
+    messages: createInitialMessages(),
+    tools: [],
+    toolRegistry,
+    permissionContext: createPermissionContext(),
+    confirmPermission: async () => {
+      confirmCount += 1;
+      return false;
+    },
+    debug: false,
+    startedAt: Date.now(),
+    createChatCompletionFn: async () => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        return createResponse({
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            {
+              id: "call-1",
+              type: "function",
+              function: {
+                name: "exec_command",
+                arguments: "{\"command\":\"npm\",\"args\":[\"run\",\"build\"]}"
+              }
+            }
+          ]
+        });
+      }
+
+      return createResponse({
+        role: "assistant",
+        content: "未执行命令。"
+      });
+    }
+  });
+
+  assert.equal(confirmCount, 1);
+  assert.equal(executeCount, 0);
+  assert.equal(result.finalText, "未执行命令。");
 });

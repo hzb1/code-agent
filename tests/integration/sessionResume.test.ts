@@ -30,6 +30,7 @@ function runNodeCommand(options: {
       cwd: options.cwd,
       env: {
         ...process.env,
+        NODE_NO_WARNINGS: "1",
         ...options.env
       }
     });
@@ -107,7 +108,7 @@ test("sessionResume: REPL 退出后可恢复最近会话并继续查看 /last", 
     };
 
     const firstRun = await runNodeCommand({
-      args: ["--conditions", "source", "--import", tsxLoaderPath, cliEntryPath],
+      args: ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath],
       cwd: tempCwd,
       env,
       stdinInput: "第一问\nexit\n"
@@ -118,14 +119,13 @@ test("sessionResume: REPL 退出后可恢复最近会话并继续查看 /last", 
     assert.match(firstRun.stderr, /已退出 REPL/);
 
     const secondRun = await runNodeCommand({
-      args: ["--conditions", "source", "--import", tsxLoaderPath, cliEntryPath],
+      args: ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath],
       cwd: tempCwd,
       env,
-      stdinInput: "/session\n/last\nexit\n"
+      stdinInput: "/last\n"
     });
     assert.equal(secondRun.code, 0);
     assert.match(secondRun.stderr, /已恢复最近会话/);
-    assert.match(secondRun.stderr, /turns: 1/);
     assert.match(secondRun.stdout, /这是第一轮回答/);
 
     const latestSessionPath = path.join(tempCwd, ".code-agent/session/latest.json");

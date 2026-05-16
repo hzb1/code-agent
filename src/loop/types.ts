@@ -1,6 +1,7 @@
 import type { AppConfig } from "#src/core/config.js";
 import type { Message } from "#src/core/message.js";
 import type { LlmChatCompletionResponse, LlmCreateChatCompletionPayload, LlmFunctionTool } from "#src/llm/types.js";
+import type { PermissionConfirm, PermissionContext } from "#src/permissions/types.js";
 import type { ToolDefinition } from "#src/tools/types.js";
 
 /**
@@ -80,6 +81,8 @@ export type QueryLoopParams = {
   messages: ReadonlyArray<Message>;
   tools: LlmFunctionTool[];
   toolRegistry: Map<string, ToolDefinition>;
+  permissionContext: PermissionContext;
+  confirmPermission?: PermissionConfirm;
   debug: boolean;
   /**
    * 是否向用户输出“对话过程日志”。

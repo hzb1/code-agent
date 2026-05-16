@@ -1,5 +1,6 @@
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
+import { createPermissionConfirm } from "#src/cli/confirm.js";
 import type { QueryEngine } from "#src/app/queryEngine.js";
 import { printAnswer, printError, printReplHelp, printReplWelcome, printSessionSummary, printSystem } from "#src/cli/output.js";
 import { SessionStorageCache } from "#src/session/cache.js";
@@ -7,7 +8,7 @@ import { clearLatestSession, saveLatestSession } from "#src/session/storage.js";
 
 const REPL_PROMPT = "ca> ";
 
-export type ReplControlCommand = "none" | "help" | "session" | "last" | "clear" | "exit";
+export type ReplControlCommand = "none" | "help" | "session" | "last" | "clear" | "plan" | "approve" | "exit";
 
 export type StartReplOptions = {
   projectRoot: string;
@@ -42,11 +43,29 @@ export function parseReplControlCommand(input: string): ReplControlCommand {
   if (normalized === "clear" || normalized === "/clear") {
     return "clear";
   }
+  if (normalized === "/approve") {
+    return "approve";
+  }
+  if (normalized === "/plan" || normalized.startsWith("/plan ")) {
+    return "plan";
+  }
   if (normalized === "exit" || normalized === "quit" || normalized === "/exit" || normalized === "/quit") {
     return "exit";
   }
 
   return "none";
+}
+
+/**
+ * 从 `/plan ...` 中提取真实需求文本。
+ */
+function parsePlanPrompt(input: string): string {
+  const trimmed = input.trim();
+  if (trimmed === "/plan") {
+    return "";
+  }
+
+  return trimmed.replace(/^\/plan\s+/i, "").trim();
 }
 
 /**
@@ -143,6 +162,10 @@ export async function startRepl(engine: QueryEngine, options: StartReplOptions):
   rl.on("close", () => {
     readlineClosed = true;
   });
+  const confirmPermission = createPermissionConfirm({
+    ask: (question) => rl.question(question),
+    print: (line) => console.error(line)
+  });
 
   printReplWelcome();
   if (options.restoredFromStorage) {
@@ -216,6 +239,36 @@ export async function startRepl(engine: QueryEngine, options: StartReplOptions):
         printSystem("已清空当前会话。");
         continue;
       }
+      if (command === "plan") {
+        const planPrompt = parsePlanPrompt(userInput);
+        if (!planPrompt) {
+          printSystem("请在 /plan 后输入需求，例如：/plan 重构 QueryEngine。");
+          continue;
+        }
+
+        engine.enterPlanMode();
+        printSystem("已进入 Plan Mode（计划模式），本轮将只进行规划。");
+        try {
+          const answer = await engine.runOnce(planPrompt, {
+            confirmPermission
+          });
+          lastAnswer = answer;
+          try {
+            await saveLatestSession(options.projectRoot, engine.exportPersistedSession(), storageCache);
+          } catch (error) {
+            printError(`保存会话失败：${toErrorMessage(error)}`);
+          }
+          printAnswer(answer);
+        } catch (error) {
+          printError(toErrorMessage(error));
+        }
+        continue;
+      }
+      if (command === "approve") {
+        const result = engine.approveLatestPlan();
+        printSystem(result.message);
+        continue;
+      }
       if (command === "exit") {
         await persistSessionBeforeExit(engine, options, storageCache);
         printSystem("已退出 REPL。");
@@ -223,7 +276,9 @@ export async function startRepl(engine: QueryEngine, options: StartReplOptions):
       }
 
       try {
-        const answer = await engine.runOnce(userInput);
+        const answer = await engine.runOnce(userInput, {
+          confirmPermission
+        });
         lastAnswer = answer;
         try {
           await saveLatestSession(options.projectRoot, engine.exportPersistedSession(), storageCache);

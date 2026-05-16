@@ -14,6 +14,8 @@ type CommandResult = {
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
 const projectRoot = path.resolve(currentDir, "../..");
+const cliEntryPath = path.join(projectRoot, "src/cli/index.ts");
+const tsxLoaderPath = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
 function runNodeCommand(
   args: string[],
@@ -25,6 +27,7 @@ function runNodeCommand(
       cwd: projectRoot,
       env: {
         ...process.env,
+        NODE_NO_WARNINGS: "1",
         ...extraEnv
       }
     });
@@ -56,7 +59,7 @@ function runNodeCommand(
 
 test("readOnlyCli: 未提供问题时进入 REPL，并支持 exit 退出", async () => {
   const result = await runNodeCommand(
-    ["--conditions", "source", "--import", "tsx", "src/cli/index.ts"],
+    ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath],
     {
       LLM_PROVIDER: "qwen",
       LLM_API_KEY: "test-key",
@@ -73,10 +76,11 @@ test("readOnlyCli: 未提供问题时进入 REPL，并支持 exit 退出", async
 
 test("readOnlyCli: REPL 收到 Ctrl+C 时会优雅退出", async (t) => {
   const result = await new Promise<CommandResult>((resolve, reject) => {
-    const child = spawn(process.execPath, ["--conditions", "source", "--import", "tsx", "src/cli/index.ts"], {
+    const child = spawn(process.execPath, ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath], {
       cwd: projectRoot,
       env: {
         ...process.env,
+        NODE_NO_WARNINGS: "1",
         LLM_PROVIDER: "qwen",
         LLM_API_KEY: "test-key",
         LLM_BASE_URL: "https://example.com",
@@ -223,7 +227,7 @@ test("readOnlyCli: 能走完真实 CLI -> 假 Provider -> read_file -> 最终答
     assert.ok(address && typeof address === "object");
 
     const result = await runNodeCommand(
-      ["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "解释 README.md"],
+      ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath, "解释 README.md"],
       {
       LLM_PROVIDER: "qwen",
       LLM_API_KEY: "test-key",

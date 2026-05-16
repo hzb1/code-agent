@@ -9,6 +9,8 @@ test("repl: parseReplControlCommand 识别控制命令", () => {
   assert.equal(parseReplControlCommand("/last"), "last");
   assert.equal(parseReplControlCommand("clear"), "clear");
   assert.equal(parseReplControlCommand("/clear"), "clear");
+  assert.equal(parseReplControlCommand("/plan 重构 queryLoop"), "plan");
+  assert.equal(parseReplControlCommand("/approve"), "approve");
   assert.equal(parseReplControlCommand("exit"), "exit");
   assert.equal(parseReplControlCommand("quit"), "exit");
 });

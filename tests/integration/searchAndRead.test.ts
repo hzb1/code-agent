@@ -14,6 +14,8 @@ type CommandResult = {
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
 const projectRoot = path.resolve(currentDir, "../..");
+const cliEntryPath = path.join(projectRoot, "src/cli/index.ts");
+const tsxLoaderPath = path.join(projectRoot, "node_modules/tsx/dist/loader.mjs");
 
 function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
@@ -21,6 +23,7 @@ function runNodeCommand(args: string[], extraEnv: Record<string, string> = {}): 
       cwd: projectRoot,
       env: {
         ...process.env,
+        NODE_NO_WARNINGS: "1",
         ...extraEnv
       }
     });
@@ -148,7 +151,7 @@ test("searchAndRead: 能完成 search_files -> read_file -> 最终回答链路",
     assert.ok(address && typeof address === "object");
 
     const result = await runNodeCommand(
-      ["--conditions", "source", "--import", "tsx", "src/cli/index.ts", "帮我找 CLI 入口文件"],
+      ["--conditions", "source", "--loader", tsxLoaderPath, cliEntryPath, "帮我找 CLI 入口文件"],
       {
         LLM_PROVIDER: "qwen",
         LLM_API_KEY: "test-key",

@@ -1,4 +1,5 @@
 import type { Message } from "#src/core/message.js";
+import type { AgentRunMode } from "#src/app/planTypes.js";
 
 /**
  * Session 层共享类型定义。
@@ -65,6 +66,9 @@ export type QuerySessionState = {
   sessionId: string;
   cwd: string;
   model: string;
+  runMode: AgentRunMode;
+  isPlanApproved: boolean;
+  hasLatestPlan: boolean;
   createdAt: number;
   updatedAt: number;
   turnCount: number;
