@@ -1,8 +1,8 @@
 {
   "name": "code-agent",
-  "version": "0.3.0",
+  "version": "0.0.0",
   "private": true,
-  "description": "CLI coding agent with controlled execution (plan mode + permission checks).",
+  "description": "从零学习并构建本地 CLI Coding Agent 的工程基线。",
   "type": "module",
   "imports": {
     "#src/*": {
@@ -22,9 +22,9 @@
     "lint:fix": "biome lint --write src",
     "start": "node dist/cli/index.js",
     "start:debug": "CODE_AGENT_DEBUG=1 node dist/cli/index.js",
-    "test": "node --conditions=source --loader tsx --test tests/**/*.test.ts",
-    "test:integration": "node --conditions=source --loader tsx --test tests/integration/**/*.test.ts",
-    "test:unit": "node --conditions=source --loader tsx --test tests/unit/**/*.test.ts",
+    "test": "node --conditions=source --import tsx --test tests/**/*.test.ts",
+    "test:integration": "node --conditions=source --import tsx --test tests/integration/**/*.test.ts",
+    "test:unit": "node --conditions=source --import tsx --test tests/unit/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
